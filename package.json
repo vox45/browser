@@ -12,7 +12,12 @@
     "build:renderer": "vite build",
     "start": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:all": "npm run build && electron-builder --win --mac --linux",
+    "postinstall": "electron-builder install-app-deps"
   },
   "author": "",
   "license": "MIT",
@@ -46,16 +51,39 @@
     },
     "files": [
       "dist/**/*",
-      "profiles/**/*"
+      "!node_modules/**/*",
+      "node_modules/better-sqlite3/**/*",
+      "node_modules/playwright-core/**/*",
+      "node_modules/socks-proxy-agent/**/*",
+      "node_modules/uuid/**/*"
     ],
+    "extraResources": [
+      {
+        "from": "profiles",
+        "to": "profiles",
+        "filter": ["**/*"]
+      }
+    ],
+    "asar": true,
     "mac": {
-      "target": "dmg"
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.utilities",
+      "icon": "assets/icon.icns"
     },
     "win": {
-      "target": "nsis"
+      "target": ["nsis", "portable"],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
     },
     "linux": {
-      "target": "AppImage"
+      "target": ["AppImage", "deb"],
+      "category": "Utility",
+      "icon": "assets/icon.png"
     }
   }
 }
