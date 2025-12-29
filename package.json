@@ -2,7 +2,7 @@
   "name": "antidetect-browser",
   "version": "1.0.0",
   "description": "Antidetect browser with unique fingerprints for each profile",
-  "main": "dist/main/index.js",
+  "main": "dist/main/main/index.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
     "dev:main": "tsc -p tsconfig.main.json --watch",
@@ -49,13 +49,6 @@
     },
     "files": [
       "dist/**/*"
-    ],
-    "extraResources": [
-      {
-        "from": "profiles",
-        "to": "profiles",
-        "filter": ["**/*"]
-      }
     ],
     "asar": true,
     "mac": {
