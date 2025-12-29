@@ -1,111 +1,77 @@
-import Database from 'better-sqlite3';
+import fs from 'fs';
 import path from 'path';
 import { app } from 'electron';
 import { Profile } from './types';
 
-let db: Database.Database;
+let dbPath: string;
+let profiles: Profile[] = [];
 
 export function initDatabase(): void {
   const userDataPath = app?.getPath('userData') || process.cwd();
-  const dbPath = path.join(userDataPath, 'profiles.db');
+  dbPath = path.join(userDataPath, 'profiles.json');
 
-  db = new Database(dbPath);
+  // Load existing profiles
+  if (fs.existsSync(dbPath)) {
+    try {
+      const data = fs.readFileSync(dbPath, 'utf-8');
+      profiles = JSON.parse(data);
+    } catch (e) {
+      profiles = [];
+    }
+  } else {
+    profiles = [];
+    saveToFile();
+  }
+}
 
-  // Create tables
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS profiles (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      last_used TEXT,
-      fingerprint TEXT NOT NULL,
-      proxy TEXT,
-      notes TEXT DEFAULT ''
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_profiles_name ON profiles(name);
-    CREATE INDEX IF NOT EXISTS idx_profiles_created ON profiles(created_at);
-  `);
+function saveToFile(): void {
+  try {
+    const dir = path.dirname(dbPath);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    fs.writeFileSync(dbPath, JSON.stringify(profiles, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('Failed to save profiles:', e);
+  }
 }
 
 export function getAllProfiles(): Profile[] {
-  const stmt = db.prepare('SELECT * FROM profiles ORDER BY created_at DESC');
-  const rows = stmt.all() as any[];
-
-  return rows.map(row => ({
-    id: row.id,
-    name: row.name,
-    createdAt: row.created_at,
-    lastUsed: row.last_used,
-    fingerprint: JSON.parse(row.fingerprint),
-    proxy: row.proxy ? JSON.parse(row.proxy) : null,
-    notes: row.notes || '',
-  }));
+  return [...profiles].sort((a, b) =>
+    new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 }
 
 export function getProfile(id: string): Profile | null {
-  const stmt = db.prepare('SELECT * FROM profiles WHERE id = ?');
-  const row = stmt.get(id) as any;
-
-  if (!row) return null;
-
-  return {
-    id: row.id,
-    name: row.name,
-    createdAt: row.created_at,
-    lastUsed: row.last_used,
-    fingerprint: JSON.parse(row.fingerprint),
-    proxy: row.proxy ? JSON.parse(row.proxy) : null,
-    notes: row.notes || '',
-  };
+  return profiles.find(p => p.id === id) || null;
 }
 
 export function createProfile(profile: Profile): void {
-  const stmt = db.prepare(`
-    INSERT INTO profiles (id, name, created_at, last_used, fingerprint, proxy, notes)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  stmt.run(
-    profile.id,
-    profile.name,
-    profile.createdAt,
-    profile.lastUsed,
-    JSON.stringify(profile.fingerprint),
-    profile.proxy ? JSON.stringify(profile.proxy) : null,
-    profile.notes
-  );
+  profiles.push(profile);
+  saveToFile();
 }
 
 export function updateProfile(profile: Profile): void {
-  const stmt = db.prepare(`
-    UPDATE profiles
-    SET name = ?, last_used = ?, fingerprint = ?, proxy = ?, notes = ?
-    WHERE id = ?
-  `);
-
-  stmt.run(
-    profile.name,
-    profile.lastUsed,
-    JSON.stringify(profile.fingerprint),
-    profile.proxy ? JSON.stringify(profile.proxy) : null,
-    profile.notes,
-    profile.id
-  );
+  const index = profiles.findIndex(p => p.id === profile.id);
+  if (index !== -1) {
+    profiles[index] = profile;
+    saveToFile();
+  }
 }
 
 export function deleteProfile(id: string): void {
-  const stmt = db.prepare('DELETE FROM profiles WHERE id = ?');
-  stmt.run(id);
+  profiles = profiles.filter(p => p.id !== id);
+  saveToFile();
 }
 
 export function updateLastUsed(id: string): void {
-  const stmt = db.prepare('UPDATE profiles SET last_used = ? WHERE id = ?');
-  stmt.run(new Date().toISOString(), id);
+  const profile = profiles.find(p => p.id === id);
+  if (profile) {
+    profile.lastUsed = new Date().toISOString();
+    saveToFile();
+  }
 }
 
 export function closeDatabase(): void {
-  if (db) {
-    db.close();
-  }
+  saveToFile();
 }
