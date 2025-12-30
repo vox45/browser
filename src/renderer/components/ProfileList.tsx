@@ -100,6 +100,7 @@ function ProfileCard({ profile, selected, onSelect, onEdit, onDelete, onLaunch, 
     { id: 'creepjs', name: 'CreepJS', icon: '👻' },
     { id: 'pixelscan', name: 'Pixelscan', icon: '📡' },
     { id: 'iphey', name: 'Iphey', icon: '🛡️' },
+    { id: 'settings', name: 'Settings', icon: '⚙️' },
   ];
 
   const getOsIcon = () => {

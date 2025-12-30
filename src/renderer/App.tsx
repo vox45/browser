@@ -115,6 +115,7 @@ function App() {
       creepjs: 'https://abrahamjuliot.github.io/creepjs/',
       pixelscan: 'https://pixelscan.net/',
       iphey: 'https://iphey.com/',
+      settings: 'chrome://settings/',
     };
     const url = site ? checkSites[site] || checkSites.browserleaks : checkSites.browserleaks;
 

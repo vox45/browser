@@ -9,6 +9,11 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
 (function() {
   'use strict';
 
+  // Skip injection on chrome:// pages - they need original APIs
+  if (window.location.protocol === 'chrome:' || window.location.protocol === 'chrome-extension:') {
+    return;
+  }
+
   const fp = ${JSON.stringify(fingerprint)};
 
   // Seeded random for consistent noise

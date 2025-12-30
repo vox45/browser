@@ -115,20 +115,31 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
   const injectScript = generateInjectScript(profile.fingerprint);
   await context.addInitScript(injectScript);
 
-  // Additional stealth scripts
+  // Additional stealth scripts - skip on chrome:// pages
   await context.addInitScript(() => {
+    // Skip injection on chrome:// pages - they need original APIs
+    if (window.location.protocol === 'chrome:' || window.location.protocol === 'chrome-extension:') {
+      return;
+    }
+
     // Hide webdriver
     Object.defineProperty(navigator, 'webdriver', {
       get: () => undefined,
     });
 
-    // Chrome runtime
-    (window as any).chrome = {
-      runtime: {},
-      loadTimes: () => ({}),
-      csi: () => ({}),
-      app: {},
-    };
+    // Chrome runtime - only add missing properties, don't overwrite
+    if (!(window as any).chrome) {
+      (window as any).chrome = {};
+    }
+    if (!(window as any).chrome.runtime) {
+      (window as any).chrome.runtime = {};
+    }
+    if (!(window as any).chrome.loadTimes) {
+      (window as any).chrome.loadTimes = () => ({});
+    }
+    if (!(window as any).chrome.csi) {
+      (window as any).chrome.csi = () => ({});
+    }
 
     // Permissions
     const originalQuery = window.navigator.permissions.query;
@@ -220,13 +231,11 @@ export async function navigateToUrl(profileId: string, url: string): Promise<boo
     let page = pages.length > 0 ? pages[0] : await instance.context.newPage();
     await page.bringToFront();
 
-    // Handle chrome:// URLs - need to type in address bar since Playwright blocks them
+    // Handle chrome:// URLs using CDP (Chrome DevTools Protocol)
     if (url.startsWith('chrome://')) {
-      // Focus address bar and type URL
-      await page.keyboard.press('Control+l'); // Focus address bar
-      await page.waitForTimeout(100);
-      await page.keyboard.type(url, { delay: 10 });
-      await page.keyboard.press('Enter');
+      const cdp = await instance.context.newCDPSession(page);
+      await cdp.send('Page.navigate', { url });
+      await cdp.detach();
       return true;
     }
 
