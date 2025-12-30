@@ -11,7 +11,10 @@ export interface Profile {
 
 // Fingerprint configuration
 export interface Fingerprint {
-  // Navigator
+  // Unique seed - ensures each profile is unique and reproducible
+  seed: string;
+
+  // Navigator basic
   userAgent: string;
   platform: string;
   language: string;
@@ -19,6 +22,18 @@ export interface Fingerprint {
   hardwareConcurrency: number;
   deviceMemory: number;
   maxTouchPoints: number;
+  vendor: string;
+  vendorSub: string;
+  product: string;
+  productSub: string;
+  appVersion: string;
+  appName: string;
+  appCodeName: string;
+  oscpu: string;
+  buildID: string;
+  doNotTrack: string | null;
+  cookieEnabled: boolean;
+  pdfViewerEnabled: boolean;
 
   // Screen
   screen: ScreenConfig;
@@ -49,6 +64,39 @@ export interface Fingerprint {
 
   // Geolocation
   geolocation: GeolocationConfig;
+
+  // Battery
+  battery: BatteryConfig;
+
+  // Connection/Network
+  connection: ConnectionConfig;
+
+  // Plugins
+  plugins: PluginConfig[];
+
+  // Client Hints (Sec-CH-UA)
+  clientHints: ClientHintsConfig;
+
+  // Speech Synthesis Voices
+  speechVoices: SpeechVoiceConfig[];
+
+  // Permissions API results
+  permissions: PermissionsConfig;
+
+  // Storage quota
+  storageQuota: StorageQuotaConfig;
+
+  // Performance timing noise
+  performanceNoise: number;
+
+  // Math fingerprint (sin/cos noise)
+  mathNoise: number;
+
+  // Date.getTimezoneOffset noise (in minutes)
+  timezoneOffsetNoise: number;
+
+  // History length
+  historyLength: number;
 }
 
 export interface GeolocationConfig {
@@ -66,6 +114,8 @@ export interface ScreenConfig {
   colorDepth: number;
   pixelDepth: number;
   devicePixelRatio: number;
+  orientation: 'landscape-primary' | 'landscape-secondary' | 'portrait-primary' | 'portrait-secondary';
+  isExtended: boolean;
 }
 
 export interface WebGLConfig {
@@ -73,15 +123,41 @@ export interface WebGLConfig {
   renderer: string;
   unmaskedVendor: string;
   unmaskedRenderer: string;
-  noise: number; // 0-1, amount of noise to add
+  version: string;
+  shadingLanguageVersion: string;
+  maxTextureSize: number;
+  maxVertexAttribs: number;
+  maxVertexUniformVectors: number;
+  maxFragmentUniformVectors: number;
+  maxVaryingVectors: number;
+  aliasedLineWidthRange: [number, number];
+  aliasedPointSizeRange: [number, number];
+  maxViewportDims: [number, number];
+  maxTextureImageUnits: number;
+  maxCombinedTextureImageUnits: number;
+  maxVertexTextureImageUnits: number;
+  maxRenderbufferSize: number;
+  maxCubeMapTextureSize: number;
+  supportedExtensions: string[];
+  noise: number;
 }
 
 export interface CanvasConfig {
-  noise: number; // 0-1, amount of noise to add to canvas
+  noise: number;
+  // Unique canvas hash seed for this profile
+  hashSeed: string;
 }
 
 export interface AudioConfig {
-  noise: number; // 0-1, amount of noise to add to audio context
+  noise: number;
+  // Audio context sample rate
+  sampleRate: number;
+  // Base latency for AudioContext
+  baseLatency: number;
+  // Output latency
+  outputLatency: number;
+  // Unique audio hash seed
+  hashSeed: string;
 }
 
 export interface WebRTCConfig {
@@ -91,9 +167,75 @@ export interface WebRTCConfig {
 }
 
 export interface MediaDevicesConfig {
-  videoinput: number; // number of cameras
-  audioinput: number; // number of microphones
-  audiooutput: number; // number of speakers
+  videoinput: number;
+  audioinput: number;
+  audiooutput: number;
+  // Unique device IDs
+  deviceIds: {
+    videoinput: string[];
+    audioinput: string[];
+    audiooutput: string[];
+  };
+}
+
+export interface BatteryConfig {
+  charging: boolean;
+  chargingTime: number;
+  dischargingTime: number;
+  level: number;
+}
+
+export interface ConnectionConfig {
+  effectiveType: '4g' | '3g' | '2g' | 'slow-2g';
+  downlink: number;
+  rtt: number;
+  saveData: boolean;
+  type: 'wifi' | 'cellular' | 'ethernet' | 'none' | 'unknown';
+}
+
+export interface PluginConfig {
+  name: string;
+  description: string;
+  filename: string;
+  mimeTypes: {
+    type: string;
+    suffixes: string;
+    description: string;
+  }[];
+}
+
+export interface ClientHintsConfig {
+  brands: { brand: string; version: string }[];
+  mobile: boolean;
+  platform: string;
+  platformVersion: string;
+  architecture: string;
+  bitness: string;
+  model: string;
+  fullVersionList: { brand: string; version: string }[];
+}
+
+export interface SpeechVoiceConfig {
+  name: string;
+  lang: string;
+  localService: boolean;
+  default: boolean;
+  voiceURI: string;
+}
+
+export interface PermissionsConfig {
+  geolocation: 'granted' | 'denied' | 'prompt';
+  notifications: 'granted' | 'denied' | 'prompt';
+  camera: 'granted' | 'denied' | 'prompt';
+  microphone: 'granted' | 'denied' | 'prompt';
+  'persistent-storage': 'granted' | 'denied' | 'prompt';
+  push: 'granted' | 'denied' | 'prompt';
+  midi: 'granted' | 'denied' | 'prompt';
+}
+
+export interface StorageQuotaConfig {
+  quota: number;
+  usage: number;
 }
 
 // Proxy configuration

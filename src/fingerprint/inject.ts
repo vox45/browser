@@ -11,25 +11,58 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
 
   const fp = ${JSON.stringify(fingerprint)};
 
-  // ==================== Navigator ====================
+  // Seeded random for consistent noise
+  let noiseSeed = 0;
+  for (let i = 0; i < fp.seed.length; i++) {
+    noiseSeed = ((noiseSeed << 5) - noiseSeed) + fp.seed.charCodeAt(i);
+    noiseSeed = noiseSeed & noiseSeed;
+  }
+  noiseSeed = Math.abs(noiseSeed);
+
+  function seededRandom() {
+    noiseSeed = (noiseSeed * 1103515245 + 12345) & 0x7fffffff;
+    return noiseSeed / 0x7fffffff;
+  }
+
+  // ==================== Navigator Basic ====================
   const navigatorProps = {
-    userAgent: { value: fp.userAgent },
-    platform: { value: fp.platform },
-    language: { value: fp.language },
-    languages: { value: Object.freeze([...fp.languages]) },
-    hardwareConcurrency: { value: fp.hardwareConcurrency },
-    deviceMemory: { value: fp.deviceMemory },
-    maxTouchPoints: { value: fp.maxTouchPoints },
+    userAgent: fp.userAgent,
+    platform: fp.platform,
+    language: fp.language,
+    languages: Object.freeze([...fp.languages]),
+    hardwareConcurrency: fp.hardwareConcurrency,
+    deviceMemory: fp.deviceMemory,
+    maxTouchPoints: fp.maxTouchPoints,
+    vendor: fp.vendor,
+    vendorSub: fp.vendorSub,
+    product: fp.product,
+    productSub: fp.productSub,
+    appVersion: fp.appVersion,
+    appName: fp.appName,
+    appCodeName: fp.appCodeName,
+    cookieEnabled: fp.cookieEnabled,
+    pdfViewerEnabled: fp.pdfViewerEnabled,
   };
 
-  for (const [prop, descriptor] of Object.entries(navigatorProps)) {
+  // Only set oscpu and buildID if they have values (Firefox-specific)
+  if (fp.oscpu) navigatorProps.oscpu = fp.oscpu;
+  if (fp.buildID) navigatorProps.buildID = fp.buildID;
+
+  for (const [prop, value] of Object.entries(navigatorProps)) {
     try {
       Object.defineProperty(Navigator.prototype, prop, {
-        get: () => descriptor.value,
+        get: () => value,
         configurable: true,
+        enumerable: true,
       });
     } catch (e) {}
   }
+
+  // Do Not Track
+  Object.defineProperty(Navigator.prototype, 'doNotTrack', {
+    get: () => fp.doNotTrack,
+    configurable: true,
+  });
 
   // ==================== Screen ====================
   const screenProps = {
@@ -50,63 +83,118 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     } catch (e) {}
   }
 
+  // Screen orientation
+  if (window.screen.orientation) {
+    Object.defineProperty(window.screen.orientation, 'type', {
+      get: () => fp.screen.orientation,
+      configurable: true,
+    });
+  }
+
+  // Screen isExtended (multi-monitor)
+  Object.defineProperty(Screen.prototype, 'isExtended', {
+    get: () => fp.screen.isExtended,
+    configurable: true,
+  });
+
   // Device pixel ratio
   Object.defineProperty(window, 'devicePixelRatio', {
     get: () => fp.screen.devicePixelRatio,
     configurable: true,
   });
 
+  // Inner/outer dimensions matching screen
+  Object.defineProperty(window, 'outerWidth', {
+    get: () => fp.screen.width,
+    configurable: true,
+  });
+  Object.defineProperty(window, 'outerHeight', {
+    get: () => fp.screen.height,
+    configurable: true,
+  });
+
   // ==================== Timezone ====================
+  const timezoneOffsets = {
+    'America/New_York': 300, 'America/Los_Angeles': 480, 'America/Chicago': 360,
+    'America/Denver': 420, 'America/Phoenix': 420, 'America/Toronto': 300,
+    'America/Vancouver': 480, 'America/Mexico_City': 360, 'America/Sao_Paulo': 180,
+    'Europe/London': 0, 'Europe/Paris': -60, 'Europe/Berlin': -60,
+    'Europe/Rome': -60, 'Europe/Madrid': -60, 'Europe/Amsterdam': -60,
+    'Europe/Moscow': -180, 'Europe/Kiev': -120, 'Europe/Warsaw': -60,
+    'Europe/Prague': -60, 'Europe/Istanbul': -180,
+    'Asia/Tokyo': -540, 'Asia/Shanghai': -480, 'Asia/Hong_Kong': -480,
+    'Asia/Singapore': -480, 'Asia/Seoul': -540, 'Asia/Bangkok': -420,
+    'Asia/Dubai': -240, 'Asia/Kolkata': -330,
+    'Australia/Sydney': -660, 'Australia/Melbourne': -660, 'Pacific/Auckland': -720,
+  };
+
+  const tzOffset = timezoneOffsets[fp.timezone] || 0;
+
+  // Intl.DateTimeFormat
   const originalDateTimeFormat = Intl.DateTimeFormat;
   const originalResolvedOptions = Intl.DateTimeFormat.prototype.resolvedOptions;
 
   Intl.DateTimeFormat = function(...args) {
-    const instance = new originalDateTimeFormat(...args);
-    return instance;
+    if (args.length === 0 || (args.length === 1 && !args[0])) {
+      args = [fp.language, { timeZone: fp.timezone }];
+    } else if (args.length >= 2 && args[1] && !args[1].timeZone) {
+      args[1] = { ...args[1], timeZone: fp.timezone };
+    }
+    return new originalDateTimeFormat(...args);
   };
   Intl.DateTimeFormat.prototype = originalDateTimeFormat.prototype;
   Intl.DateTimeFormat.supportedLocalesOf = originalDateTimeFormat.supportedLocalesOf;
+  Object.defineProperty(Intl.DateTimeFormat, 'length', { value: 0 });
+  Object.defineProperty(Intl.DateTimeFormat, 'name', { value: 'DateTimeFormat' });
 
   Intl.DateTimeFormat.prototype.resolvedOptions = function() {
     const options = originalResolvedOptions.call(this);
     options.timeZone = fp.timezone;
+    options.locale = fp.language;
     return options;
   };
 
   // Date.prototype.getTimezoneOffset
-  const tzOffset = getTimezoneOffset(fp.timezone);
   Date.prototype.getTimezoneOffset = function() {
-    return tzOffset;
+    return tzOffset + fp.timezoneOffsetNoise;
   };
 
-  function getTimezoneOffset(tz) {
-    const offsets = {
-      'America/New_York': 300,
-      'America/Los_Angeles': 480,
-      'America/Chicago': 360,
-      'America/Denver': 420,
-      'Europe/London': 0,
-      'Europe/Paris': -60,
-      'Europe/Berlin': -60,
-      'Europe/Moscow': -180,
-      'Asia/Tokyo': -540,
-      'Asia/Shanghai': -480,
-      'Asia/Singapore': -480,
-      'Australia/Sydney': -660,
-    };
-    return offsets[tz] || 0;
-  }
+  // Date formatting to use correct timezone
+  const originalToString = Date.prototype.toString;
+  const originalToTimeString = Date.prototype.toTimeString;
+  const originalToDateString = Date.prototype.toDateString;
+  const originalToLocaleString = Date.prototype.toLocaleString;
 
-  // ==================== WebGL ====================
+  Date.prototype.toLocaleString = function(...args) {
+    if (args.length === 0) {
+      args = [fp.language, { timeZone: fp.timezone }];
+    }
+    return originalToLocaleString.apply(this, args);
+  };
+
+  // ==================== WebGL Extended ====================
   const getParameterProxy = function(target) {
     return function(parameter) {
-      // UNMASKED_VENDOR_WEBGL
-      if (parameter === 37445) {
-        return fp.webgl.unmaskedVendor;
-      }
-      // UNMASKED_RENDERER_WEBGL
-      if (parameter === 37446) {
-        return fp.webgl.unmaskedRenderer;
+      switch (parameter) {
+        case 37445: return fp.webgl.unmaskedVendor; // UNMASKED_VENDOR_WEBGL
+        case 37446: return fp.webgl.unmaskedRenderer; // UNMASKED_RENDERER_WEBGL
+        case 7936: return fp.webgl.vendor; // VENDOR
+        case 7937: return fp.webgl.renderer; // RENDERER
+        case 7938: return fp.webgl.version; // VERSION
+        case 35724: return fp.webgl.shadingLanguageVersion; // SHADING_LANGUAGE_VERSION
+        case 3379: return fp.webgl.maxTextureSize; // MAX_TEXTURE_SIZE
+        case 34076: return fp.webgl.maxCubeMapTextureSize; // MAX_CUBE_MAP_TEXTURE_SIZE
+        case 34024: return fp.webgl.maxRenderbufferSize; // MAX_RENDERBUFFER_SIZE
+        case 34930: return fp.webgl.maxTextureImageUnits; // MAX_TEXTURE_IMAGE_UNITS
+        case 35661: return fp.webgl.maxCombinedTextureImageUnits; // MAX_COMBINED_TEXTURE_IMAGE_UNITS
+        case 35660: return fp.webgl.maxVertexTextureImageUnits; // MAX_VERTEX_TEXTURE_IMAGE_UNITS
+        case 34921: return fp.webgl.maxVertexAttribs; // MAX_VERTEX_ATTRIBS
+        case 36347: return fp.webgl.maxVertexUniformVectors; // MAX_VERTEX_UNIFORM_VECTORS
+        case 36348: return fp.webgl.maxFragmentUniformVectors; // MAX_FRAGMENT_UNIFORM_VECTORS
+        case 36349: return fp.webgl.maxVaryingVectors; // MAX_VARYING_VECTORS
+        case 3386: return new Float32Array(fp.webgl.maxViewportDims); // MAX_VIEWPORT_DIMS
+        case 3408: return new Float32Array(fp.webgl.aliasedPointSizeRange); // ALIASED_POINT_SIZE_RANGE
+        case 3407: return new Float32Array(fp.webgl.aliasedLineWidthRange); // ALIASED_LINE_WIDTH_RANGE
       }
       return target.call(this, parameter);
     };
@@ -120,12 +208,24 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     WebGL2RenderingContext.prototype.getParameter = getParameterProxy(originalGetParameter2);
   }
 
-  // WebGL noise
+  // WebGL getSupportedExtensions
+  const originalGetSupportedExtensions = WebGLRenderingContext.prototype.getSupportedExtensions;
+  WebGLRenderingContext.prototype.getSupportedExtensions = function() {
+    return fp.webgl.supportedExtensions;
+  };
+
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    WebGL2RenderingContext.prototype.getSupportedExtensions = function() {
+      return fp.webgl.supportedExtensions;
+    };
+  }
+
+  // WebGL noise with seeded random for consistency
   const addWebGLNoise = (pixels) => {
     if (!pixels || fp.webgl.noise === 0) return pixels;
     const noise = fp.webgl.noise;
     for (let i = 0; i < pixels.length; i++) {
-      pixels[i] = Math.max(0, Math.min(255, pixels[i] + Math.floor((Math.random() - 0.5) * noise * 255)));
+      pixels[i] = Math.max(0, Math.min(255, pixels[i] + Math.floor((seededRandom() - 0.5) * noise * 255)));
     }
     return pixels;
   };
@@ -133,132 +233,202 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
   const originalReadPixels = WebGLRenderingContext.prototype.readPixels;
   WebGLRenderingContext.prototype.readPixels = function(...args) {
     originalReadPixels.apply(this, args);
-    if (args[6]) {
-      addWebGLNoise(args[6]);
-    }
+    if (args[6]) addWebGLNoise(args[6]);
   };
+
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    const originalReadPixels2 = WebGL2RenderingContext.prototype.readPixels;
+    WebGL2RenderingContext.prototype.readPixels = function(...args) {
+      originalReadPixels2.apply(this, args);
+      if (args[6]) addWebGLNoise(args[6]);
+    };
+  }
 
   // ==================== Canvas ====================
   const originalToDataURL = HTMLCanvasElement.prototype.toDataURL;
   const originalToBlob = HTMLCanvasElement.prototype.toBlob;
   const originalGetImageData = CanvasRenderingContext2D.prototype.getImageData;
 
-  // Add noise to canvas
-  function addCanvasNoise(canvas) {
+  // Seeded canvas noise for consistency
+  function addCanvasNoise(imageData) {
     if (fp.canvas.noise === 0) return;
-    try {
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      const imageData = originalGetImageData.call(ctx, 0, 0, canvas.width, canvas.height);
-      const pixels = imageData.data;
-      const noise = fp.canvas.noise;
+    const pixels = imageData.data;
+    const noise = fp.canvas.noise;
+    // Use hash seed to create consistent but unique noise pattern
+    let localSeed = 0;
+    for (let i = 0; i < fp.canvas.hashSeed.length; i++) {
+      localSeed = ((localSeed << 5) - localSeed) + fp.canvas.hashSeed.charCodeAt(i);
+    }
 
-      for (let i = 0; i < pixels.length; i += 4) {
-        // Add subtle noise to RGB channels
-        pixels[i] = Math.max(0, Math.min(255, pixels[i] + Math.floor((Math.random() - 0.5) * noise * 10)));
-        pixels[i + 1] = Math.max(0, Math.min(255, pixels[i + 1] + Math.floor((Math.random() - 0.5) * noise * 10)));
-        pixels[i + 2] = Math.max(0, Math.min(255, pixels[i + 2] + Math.floor((Math.random() - 0.5) * noise * 10)));
-      }
-      ctx.putImageData(imageData, 0, 0);
-    } catch (e) {}
+    for (let i = 0; i < pixels.length; i += 4) {
+      localSeed = (localSeed * 1103515245 + 12345) & 0x7fffffff;
+      const r = (localSeed / 0x7fffffff - 0.5) * noise * 10;
+      localSeed = (localSeed * 1103515245 + 12345) & 0x7fffffff;
+      const g = (localSeed / 0x7fffffff - 0.5) * noise * 10;
+      localSeed = (localSeed * 1103515245 + 12345) & 0x7fffffff;
+      const b = (localSeed / 0x7fffffff - 0.5) * noise * 10;
+
+      pixels[i] = Math.max(0, Math.min(255, pixels[i] + Math.floor(r)));
+      pixels[i + 1] = Math.max(0, Math.min(255, pixels[i + 1] + Math.floor(g)));
+      pixels[i + 2] = Math.max(0, Math.min(255, pixels[i + 2] + Math.floor(b)));
+    }
   }
 
   HTMLCanvasElement.prototype.toDataURL = function(...args) {
-    addCanvasNoise(this);
+    try {
+      const ctx = this.getContext('2d');
+      if (ctx && fp.canvas.noise > 0) {
+        const imageData = originalGetImageData.call(ctx, 0, 0, this.width, this.height);
+        addCanvasNoise(imageData);
+        ctx.putImageData(imageData, 0, 0);
+      }
+    } catch (e) {}
     return originalToDataURL.apply(this, args);
   };
 
-  HTMLCanvasElement.prototype.toBlob = function(...args) {
-    addCanvasNoise(this);
-    return originalToBlob.apply(this, args);
+  HTMLCanvasElement.prototype.toBlob = function(callback, ...args) {
+    try {
+      const ctx = this.getContext('2d');
+      if (ctx && fp.canvas.noise > 0) {
+        const imageData = originalGetImageData.call(ctx, 0, 0, this.width, this.height);
+        addCanvasNoise(imageData);
+        ctx.putImageData(imageData, 0, 0);
+      }
+    } catch (e) {}
+    return originalToBlob.call(this, callback, ...args);
   };
 
   CanvasRenderingContext2D.prototype.getImageData = function(...args) {
     const imageData = originalGetImageData.apply(this, args);
-    if (fp.canvas.noise > 0) {
-      const pixels = imageData.data;
-      const noise = fp.canvas.noise;
-      for (let i = 0; i < pixels.length; i += 4) {
-        pixels[i] = Math.max(0, Math.min(255, pixels[i] + Math.floor((Math.random() - 0.5) * noise * 10)));
-        pixels[i + 1] = Math.max(0, Math.min(255, pixels[i + 1] + Math.floor((Math.random() - 0.5) * noise * 10)));
-        pixels[i + 2] = Math.max(0, Math.min(255, pixels[i + 2] + Math.floor((Math.random() - 0.5) * noise * 10)));
-      }
-    }
+    addCanvasNoise(imageData);
     return imageData;
   };
 
   // ==================== Audio ====================
-  if (fp.audio.noise > 0) {
-    const originalCreateAnalyser = AudioContext.prototype.createAnalyser;
-    AudioContext.prototype.createAnalyser = function() {
-      const analyser = originalCreateAnalyser.call(this);
-      const originalGetFloatFrequencyData = analyser.getFloatFrequencyData.bind(analyser);
-      const originalGetByteFrequencyData = analyser.getByteFrequencyData.bind(analyser);
+  // Audio context properties
+  const originalAudioContext = window.AudioContext || window.webkitAudioContext;
+  if (originalAudioContext) {
+    window.AudioContext = function(...args) {
+      const ctx = new originalAudioContext(...args);
 
-      analyser.getFloatFrequencyData = function(array) {
-        originalGetFloatFrequencyData(array);
-        for (let i = 0; i < array.length; i++) {
-          array[i] += (Math.random() - 0.5) * fp.audio.noise;
+      Object.defineProperty(ctx, 'sampleRate', {
+        get: () => fp.audio.sampleRate,
+      });
+      Object.defineProperty(ctx, 'baseLatency', {
+        get: () => fp.audio.baseLatency,
+      });
+      Object.defineProperty(ctx, 'outputLatency', {
+        get: () => fp.audio.outputLatency,
+      });
+
+      // Add noise to analyser
+      const originalCreateAnalyser = ctx.createAnalyser.bind(ctx);
+      ctx.createAnalyser = function() {
+        const analyser = originalCreateAnalyser();
+        const originalGetFloatFrequencyData = analyser.getFloatFrequencyData.bind(analyser);
+        const originalGetByteFrequencyData = analyser.getByteFrequencyData.bind(analyser);
+        const originalGetFloatTimeDomainData = analyser.getFloatTimeDomainData.bind(analyser);
+        const originalGetByteTimeDomainData = analyser.getByteTimeDomainData.bind(analyser);
+
+        // Seeded noise for consistency
+        let audioSeed = 0;
+        for (let i = 0; i < fp.audio.hashSeed.length; i++) {
+          audioSeed = ((audioSeed << 5) - audioSeed) + fp.audio.hashSeed.charCodeAt(i);
         }
-      };
 
-      analyser.getByteFrequencyData = function(array) {
-        originalGetByteFrequencyData(array);
-        for (let i = 0; i < array.length; i++) {
-          array[i] = Math.max(0, Math.min(255, array[i] + Math.floor((Math.random() - 0.5) * fp.audio.noise * 10)));
-        }
-      };
+        const audioNoise = () => {
+          audioSeed = (audioSeed * 1103515245 + 12345) & 0x7fffffff;
+          return (audioSeed / 0x7fffffff - 0.5) * fp.audio.noise;
+        };
 
-      return analyser;
-    };
-
-    // OfflineAudioContext
-    if (typeof OfflineAudioContext !== 'undefined') {
-      const originalStartRendering = OfflineAudioContext.prototype.startRendering;
-      OfflineAudioContext.prototype.startRendering = function() {
-        return originalStartRendering.call(this).then(buffer => {
-          for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
-            const data = buffer.getChannelData(channel);
-            for (let i = 0; i < data.length; i++) {
-              data[i] += (Math.random() - 0.5) * fp.audio.noise * 0.0001;
-            }
+        analyser.getFloatFrequencyData = function(array) {
+          originalGetFloatFrequencyData(array);
+          for (let i = 0; i < array.length; i++) {
+            array[i] += audioNoise();
           }
-          return buffer;
-        });
+        };
+
+        analyser.getByteFrequencyData = function(array) {
+          originalGetByteFrequencyData(array);
+          for (let i = 0; i < array.length; i++) {
+            array[i] = Math.max(0, Math.min(255, array[i] + Math.floor(audioNoise() * 10)));
+          }
+        };
+
+        analyser.getFloatTimeDomainData = function(array) {
+          originalGetFloatTimeDomainData(array);
+          for (let i = 0; i < array.length; i++) {
+            array[i] += audioNoise() * 0.01;
+          }
+        };
+
+        analyser.getByteTimeDomainData = function(array) {
+          originalGetByteTimeDomainData(array);
+          for (let i = 0; i < array.length; i++) {
+            array[i] = Math.max(0, Math.min(255, array[i] + Math.floor(audioNoise() * 5)));
+          }
+        };
+
+        return analyser;
       };
-    }
+
+      return ctx;
+    };
+    window.AudioContext.prototype = originalAudioContext.prototype;
+  }
+
+  // OfflineAudioContext
+  if (typeof OfflineAudioContext !== 'undefined') {
+    const originalOfflineAudioContext = OfflineAudioContext;
+    const originalStartRendering = OfflineAudioContext.prototype.startRendering;
+
+    OfflineAudioContext.prototype.startRendering = function() {
+      return originalStartRendering.call(this).then(buffer => {
+        let audioSeed = 0;
+        for (let i = 0; i < fp.audio.hashSeed.length; i++) {
+          audioSeed = ((audioSeed << 5) - audioSeed) + fp.audio.hashSeed.charCodeAt(i);
+        }
+
+        for (let channel = 0; channel < buffer.numberOfChannels; channel++) {
+          const data = buffer.getChannelData(channel);
+          for (let i = 0; i < data.length; i++) {
+            audioSeed = (audioSeed * 1103515245 + 12345) & 0x7fffffff;
+            data[i] += (audioSeed / 0x7fffffff - 0.5) * fp.audio.noise * 0.0001;
+          }
+        }
+        return buffer;
+      });
+    };
   }
 
   // ==================== WebRTC ====================
   if (fp.webrtc.mode === 'disabled') {
-    // Disable WebRTC entirely
     window.RTCPeerConnection = undefined;
     window.webkitRTCPeerConnection = undefined;
     window.mozRTCPeerConnection = undefined;
     if (navigator.mediaDevices) {
-      navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error('getUserMedia is not supported'));
+      const originalGetUserMedia = navigator.mediaDevices.getUserMedia;
+      navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('Permission denied', 'NotAllowedError'));
     }
-  } else if (fp.webrtc.mode === 'fake') {
-    // Fake WebRTC - return fake IPs
+  } else if (fp.webrtc.mode === 'fake' && fp.webrtc.publicIp) {
     const originalRTCPeerConnection = window.RTCPeerConnection;
-    window.RTCPeerConnection = function(...args) {
-      const pc = new originalRTCPeerConnection(...args);
-      const originalCreateOffer = pc.createOffer.bind(pc);
-      const originalCreateAnswer = pc.createAnswer.bind(pc);
-      const originalSetLocalDescription = pc.setLocalDescription.bind(pc);
+    if (originalRTCPeerConnection) {
+      window.RTCPeerConnection = function(...args) {
+        const pc = new originalRTCPeerConnection(...args);
+        const originalCreateOffer = pc.createOffer.bind(pc);
+        const originalSetLocalDescription = pc.setLocalDescription.bind(pc);
 
-      pc.createOffer = function(options) {
-        return originalCreateOffer(options).then(offer => {
-          if (fp.webrtc.publicIp) {
+        pc.createOffer = function(options) {
+          return originalCreateOffer(options).then(offer => {
             offer.sdp = offer.sdp.replace(/([0-9]{1,3}(\\.[0-9]{1,3}){3})/g, fp.webrtc.publicIp);
-          }
-          return offer;
-        });
-      };
+            return offer;
+          });
+        };
 
-      return pc;
-    };
-    window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
+        return pc;
+      };
+      window.RTCPeerConnection.prototype = originalRTCPeerConnection.prototype;
+    }
   }
 
   // ==================== ClientRects ====================
@@ -272,14 +442,15 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     return new Proxy(rects, {
       get(target, prop) {
         if (prop === 'length') return target.length;
+        if (prop === 'item') return (i) => target[i];
         if (typeof prop === 'string' && !isNaN(parseInt(prop))) {
           const rect = target[parseInt(prop)];
           if (rect) {
             return new DOMRect(
-              rect.x + (Math.random() - 0.5) * noise,
-              rect.y + (Math.random() - 0.5) * noise,
-              rect.width + (Math.random() - 0.5) * noise,
-              rect.height + (Math.random() - 0.5) * noise
+              rect.x + (seededRandom() - 0.5) * noise,
+              rect.y + (seededRandom() - 0.5) * noise,
+              rect.width + (seededRandom() - 0.5) * noise,
+              rect.height + (seededRandom() - 0.5) * noise
             );
           }
         }
@@ -293,48 +464,45 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     const noise = fp.clientRectsNoise;
 
     return new DOMRect(
-      rect.x + (Math.random() - 0.5) * noise,
-      rect.y + (Math.random() - 0.5) * noise,
-      rect.width + (Math.random() - 0.5) * noise,
-      rect.height + (Math.random() - 0.5) * noise
+      rect.x + (seededRandom() - 0.5) * noise,
+      rect.y + (seededRandom() - 0.5) * noise,
+      rect.width + (seededRandom() - 0.5) * noise,
+      rect.height + (seededRandom() - 0.5) * noise
     );
   };
 
   // ==================== Media Devices ====================
   if (navigator.mediaDevices && navigator.mediaDevices.enumerateDevices) {
-    const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
     navigator.mediaDevices.enumerateDevices = async function() {
       const devices = [];
 
-      // Video inputs
-      for (let i = 0; i < fp.mediaDevices.videoinput; i++) {
+      // Use pre-generated device IDs for consistency
+      fp.mediaDevices.deviceIds.videoinput.forEach((id, i) => {
         devices.push({
-          deviceId: crypto.randomUUID(),
+          deviceId: id,
           kind: 'videoinput',
-          label: i === 0 ? 'Integrated Camera' : 'USB Camera ' + i,
-          groupId: crypto.randomUUID(),
+          label: i === 0 ? 'Integrated Webcam' : 'USB Camera ' + i,
+          groupId: id.slice(0, 32),
         });
-      }
+      });
 
-      // Audio inputs
-      for (let i = 0; i < fp.mediaDevices.audioinput; i++) {
+      fp.mediaDevices.deviceIds.audioinput.forEach((id, i) => {
         devices.push({
-          deviceId: crypto.randomUUID(),
+          deviceId: id,
           kind: 'audioinput',
-          label: i === 0 ? 'Default - Microphone' : 'Microphone ' + i,
-          groupId: crypto.randomUUID(),
+          label: i === 0 ? 'Default - Microphone Array' : 'Microphone ' + i,
+          groupId: id.slice(0, 32),
         });
-      }
+      });
 
-      // Audio outputs
-      for (let i = 0; i < fp.mediaDevices.audiooutput; i++) {
+      fp.mediaDevices.deviceIds.audiooutput.forEach((id, i) => {
         devices.push({
-          deviceId: crypto.randomUUID(),
+          deviceId: id,
           kind: 'audiooutput',
           label: i === 0 ? 'Default - Speakers' : 'Speakers ' + i,
-          groupId: crypto.randomUUID(),
+          groupId: id.slice(0, 32),
         });
-      }
+      });
 
       return devices;
     };
@@ -343,60 +511,205 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
   // ==================== Plugins ====================
   Object.defineProperty(Navigator.prototype, 'plugins', {
     get: () => {
-      const plugins = [
-        { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer', description: 'Portable Document Format' },
-        { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai', description: '' },
-        { name: 'Native Client', filename: 'internal-nacl-plugin', description: '' },
-      ];
-
       const pluginArray = Object.create(PluginArray.prototype);
-      plugins.forEach((p, i) => {
+
+      fp.plugins.forEach((p, i) => {
         const plugin = Object.create(Plugin.prototype);
-        Object.defineProperties(plugin, {
-          name: { value: p.name },
-          filename: { value: p.filename },
-          description: { value: p.description },
-          length: { value: 1 },
+        const mimeTypes = p.mimeTypes.map((m, j) => {
+          const mimeType = Object.create(MimeType.prototype);
+          Object.defineProperties(mimeType, {
+            type: { value: m.type, enumerable: true },
+            suffixes: { value: m.suffixes, enumerable: true },
+            description: { value: m.description, enumerable: true },
+            enabledPlugin: { value: plugin, enumerable: true },
+          });
+          return mimeType;
         });
+
+        Object.defineProperties(plugin, {
+          name: { value: p.name, enumerable: true },
+          filename: { value: p.filename, enumerable: true },
+          description: { value: p.description, enumerable: true },
+          length: { value: mimeTypes.length, enumerable: true },
+        });
+
+        mimeTypes.forEach((m, j) => {
+          plugin[j] = m;
+        });
+
         pluginArray[i] = plugin;
+        pluginArray[p.name] = plugin;
       });
 
-      Object.defineProperty(pluginArray, 'length', { value: plugins.length });
+      Object.defineProperty(pluginArray, 'length', { value: fp.plugins.length });
+      pluginArray.item = (i) => pluginArray[i];
+      pluginArray.namedItem = (name) => pluginArray[name];
+      pluginArray.refresh = () => {};
+
       return pluginArray;
     },
     configurable: true,
   });
 
-  // ==================== Permissions ====================
-  const originalQuery = Permissions.prototype.query;
-  Permissions.prototype.query = function(desc) {
-    if (desc.name === 'notifications') {
-      return Promise.resolve({ state: 'prompt', onchange: null });
-    }
-    return originalQuery.call(this, desc);
-  };
+  // MimeTypes
+  Object.defineProperty(Navigator.prototype, 'mimeTypes', {
+    get: () => {
+      const mimeTypeArray = Object.create(MimeTypeArray.prototype);
+      let allMimeTypes = [];
+      let index = 0;
+
+      fp.plugins.forEach(p => {
+        p.mimeTypes.forEach(m => {
+          const mimeType = Object.create(MimeType.prototype);
+          Object.defineProperties(mimeType, {
+            type: { value: m.type, enumerable: true },
+            suffixes: { value: m.suffixes, enumerable: true },
+            description: { value: m.description, enumerable: true },
+          });
+          mimeTypeArray[index++] = mimeType;
+          mimeTypeArray[m.type] = mimeType;
+          allMimeTypes.push(mimeType);
+        });
+      });
+
+      Object.defineProperty(mimeTypeArray, 'length', { value: allMimeTypes.length });
+      mimeTypeArray.item = (i) => mimeTypeArray[i];
+      mimeTypeArray.namedItem = (name) => mimeTypeArray[name];
+
+      return mimeTypeArray;
+    },
+    configurable: true,
+  });
 
   // ==================== Battery ====================
   if (navigator.getBattery) {
     navigator.getBattery = () => Promise.resolve({
-      charging: true,
-      chargingTime: 0,
-      dischargingTime: Infinity,
-      level: 1,
+      charging: fp.battery.charging,
+      chargingTime: fp.battery.chargingTime,
+      dischargingTime: fp.battery.dischargingTime,
+      level: fp.battery.level,
       addEventListener: () => {},
       removeEventListener: () => {},
+      dispatchEvent: () => true,
+      onchargingchange: null,
+      onchargingtimechange: null,
+      ondischargingtimechange: null,
+      onlevelchange: null,
     });
   }
 
   // ==================== Connection ====================
   if (navigator.connection) {
     Object.defineProperties(navigator.connection, {
-      effectiveType: { value: '4g', configurable: true },
-      rtt: { value: 50, configurable: true },
-      downlink: { value: 10, configurable: true },
-      saveData: { value: false, configurable: true },
+      effectiveType: { value: fp.connection.effectiveType, configurable: true, enumerable: true },
+      rtt: { value: fp.connection.rtt, configurable: true, enumerable: true },
+      downlink: { value: fp.connection.downlink, configurable: true, enumerable: true },
+      saveData: { value: fp.connection.saveData, configurable: true, enumerable: true },
+      type: { value: fp.connection.type, configurable: true, enumerable: true },
     });
   }
+
+  // ==================== Client Hints ====================
+  if (navigator.userAgentData) {
+    Object.defineProperty(navigator, 'userAgentData', {
+      get: () => ({
+        brands: fp.clientHints.brands,
+        mobile: fp.clientHints.mobile,
+        platform: fp.clientHints.platform,
+        getHighEntropyValues: (hints) => Promise.resolve({
+          brands: fp.clientHints.brands,
+          mobile: fp.clientHints.mobile,
+          platform: fp.clientHints.platform,
+          platformVersion: fp.clientHints.platformVersion,
+          architecture: fp.clientHints.architecture,
+          bitness: fp.clientHints.bitness,
+          model: fp.clientHints.model,
+          fullVersionList: fp.clientHints.fullVersionList,
+          uaFullVersion: fp.clientHints.fullVersionList[2]?.version || '',
+        }),
+        toJSON: () => ({
+          brands: fp.clientHints.brands,
+          mobile: fp.clientHints.mobile,
+          platform: fp.clientHints.platform,
+        }),
+      }),
+      configurable: true,
+    });
+  }
+
+  // ==================== Speech Synthesis ====================
+  if (window.speechSynthesis) {
+    const originalGetVoices = window.speechSynthesis.getVoices.bind(window.speechSynthesis);
+    window.speechSynthesis.getVoices = function() {
+      return fp.speechVoices.map(v => {
+        const voice = Object.create(SpeechSynthesisVoice.prototype);
+        Object.defineProperties(voice, {
+          name: { value: v.name, enumerable: true },
+          lang: { value: v.lang, enumerable: true },
+          localService: { value: v.localService, enumerable: true },
+          default: { value: v.default, enumerable: true },
+          voiceURI: { value: v.voiceURI, enumerable: true },
+        });
+        return voice;
+      });
+    };
+  }
+
+  // ==================== Permissions ====================
+  const originalQuery = Permissions.prototype.query;
+  Permissions.prototype.query = function(desc) {
+    const permState = fp.permissions[desc.name];
+    if (permState) {
+      return Promise.resolve({
+        state: permState,
+        name: desc.name,
+        onchange: null,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => true,
+      });
+    }
+    return originalQuery.call(this, desc);
+  };
+
+  // ==================== Storage Quota ====================
+  if (navigator.storage && navigator.storage.estimate) {
+    navigator.storage.estimate = () => Promise.resolve({
+      quota: fp.storageQuota.quota,
+      usage: fp.storageQuota.usage,
+    });
+  }
+
+  // ==================== Performance ====================
+  if (window.performance && window.performance.now) {
+    const originalNow = window.performance.now.bind(window.performance);
+    window.performance.now = function() {
+      return originalNow() + (seededRandom() - 0.5) * fp.performanceNoise * 100;
+    };
+  }
+
+  // ==================== Math fingerprinting protection ====================
+  const originalSin = Math.sin;
+  const originalCos = Math.cos;
+  const originalTan = Math.tan;
+
+  Math.sin = function(x) {
+    return originalSin(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.cos = function(x) {
+    return originalCos(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.tan = function(x) {
+    return originalTan(x) + fp.mathNoise * seededRandom();
+  };
+
+  // ==================== History ====================
+  Object.defineProperty(History.prototype, 'length', {
+    get: () => fp.historyLength,
+    configurable: true,
+  });
 
   // ==================== Geolocation ====================
   if (fp.geolocation && fp.geolocation.enabled) {
@@ -414,18 +727,28 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     };
 
     navigator.geolocation.getCurrentPosition = function(success, error, options) {
-      setTimeout(() => success(fakePosition), 100);
+      setTimeout(() => success(fakePosition), 50 + Math.random() * 100);
     };
 
+    let watchId = 1;
     navigator.geolocation.watchPosition = function(success, error, options) {
-      setTimeout(() => success(fakePosition), 100);
-      return Math.floor(Math.random() * 10000);
+      const id = watchId++;
+      setTimeout(() => success(fakePosition), 50 + Math.random() * 100);
+      return id;
     };
 
     navigator.geolocation.clearWatch = function(id) {};
   }
 
-  console.log('[Antidetect] Fingerprint injected successfully');
+  // ==================== Fonts Detection Protection ====================
+  // Make font detection return consistent results based on fp.fonts
+  const fontSet = new Set(fp.fonts);
+  const originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+  const originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
+
+  // We can't fully spoof fonts, but we can add noise to measurements
+
+  console.log('[Antidetect] Fingerprint injected - Seed:', fp.seed.slice(0, 8) + '...');
 })();
 `;
 }
