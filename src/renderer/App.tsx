@@ -19,6 +19,7 @@ function App() {
   const [editingProfile, setEditingProfile] = useState<ProfileWithStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState<Page>('profiles');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const loadProfiles = useCallback(async () => {
     try {
@@ -85,6 +86,54 @@ function App() {
     } catch (error) {
       console.error('Failed to stop browser:', error);
     }
+  };
+
+  const handleSelect = (id: string, selected: boolean) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = (selected: boolean) => {
+    if (selected) {
+      const allIds = new Set(filteredProfiles.map(p => p.id));
+      setSelectedIds(allIds);
+    } else {
+      setSelectedIds(new Set());
+    }
+  };
+
+  const handleCheckFingerprint = async (id: string) => {
+    try {
+      const result = await window.api.navigateToUrl(id, 'https://browserleaks.com/canvas');
+      if ('error' in result) {
+        alert(`Failed to open fingerprint check: ${result.error}`);
+      }
+    } catch (error) {
+      console.error('Failed to check fingerprint:', error);
+    }
+  };
+
+  const handleMassLaunch = async () => {
+    const selectedProfiles = profiles.filter(p => selectedIds.has(p.id) && !p.isRunning);
+    for (const profile of selectedProfiles) {
+      await handleLaunchProfile(profile.id);
+    }
+    setSelectedIds(new Set());
+  };
+
+  const handleMassStop = async () => {
+    const selectedProfiles = profiles.filter(p => selectedIds.has(p.id) && p.isRunning);
+    for (const profile of selectedProfiles) {
+      await handleStopProfile(profile.id);
+    }
+    setSelectedIds(new Set());
   };
 
   const handleSaveProfile = async (data: {
@@ -159,6 +208,22 @@ function App() {
             </span>
           </div>
           <div className="header-right">
+            {selectedIds.size > 0 && (
+              <div className="mass-actions">
+                <button className="btn btn-success" onClick={handleMassLaunch}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <polygon points="5,3 19,12 5,21" />
+                  </svg>
+                  Start ({selectedIds.size})
+                </button>
+                <button className="btn btn-secondary" onClick={handleMassStop}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                    <rect x="6" y="6" width="12" height="12" rx="1" />
+                  </svg>
+                  Stop ({selectedIds.size})
+                </button>
+              </div>
+            )}
             {currentPage === 'profiles' && (
               <>
                 <div className="search-box">
@@ -202,10 +267,14 @@ function App() {
         ) : (
           <ProfileList
             profiles={displayProfiles}
+            selectedIds={selectedIds}
+            onSelect={handleSelect}
+            onSelectAll={handleSelectAll}
             onEdit={handleEditProfile}
             onDelete={handleDeleteProfile}
             onLaunch={handleLaunchProfile}
             onStop={handleStopProfile}
+            onCheckFingerprint={handleCheckFingerprint}
           />
         )}
       </>

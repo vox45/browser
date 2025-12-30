@@ -13,7 +13,7 @@ import {
 } from '../core/database';
 import { Profile, ProxyConfig } from '../core/types';
 import { generateFingerprint, GenerateFingerprintOptions } from '../fingerprint/generator';
-import { launchBrowser, stopBrowser, isBrowserRunning, stopAllBrowsers, deleteProfileData } from '../core/browser';
+import { launchBrowser, stopBrowser, isBrowserRunning, stopAllBrowsers, deleteProfileData, navigateToUrl } from '../core/browser';
 import { testProxy, parseProxyString } from '../proxy/manager';
 
 let mainWindow: BrowserWindow | null = null;
@@ -249,4 +249,17 @@ ipcMain.handle('browser:status', async (_, id: string) => {
 // Open external link
 ipcMain.handle('shell:openExternal', async (_, url: string) => {
   await shell.openExternal(url);
+});
+
+// Navigate to URL in browser profile
+ipcMain.handle('browser:navigate', async (_, id: string, url: string) => {
+  try {
+    if (!isBrowserRunning(id)) {
+      return { error: 'Browser is not running' };
+    }
+    const success = await navigateToUrl(id, url);
+    return { success };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 });

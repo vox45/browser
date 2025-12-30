@@ -69,6 +69,15 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
     fs.mkdirSync(profileDataDir, { recursive: true });
   }
 
+  // Prepare geolocation if enabled
+  const geolocation = profile.fingerprint.geolocation?.enabled
+    ? {
+        latitude: profile.fingerprint.geolocation.latitude,
+        longitude: profile.fingerprint.geolocation.longitude,
+        accuracy: profile.fingerprint.geolocation.accuracy,
+      }
+    : undefined;
+
   // Use launchPersistentContext to save ALL browser data (cookies, localStorage, cache, etc.)
   const context = await chromium.launchPersistentContext(profileDataDir, {
     headless: false,
@@ -82,6 +91,8 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
     timezoneId: profile.fingerprint.timezone,
     deviceScaleFactor: profile.fingerprint.screen.devicePixelRatio,
     proxy: profile.proxy ? getPlaywrightProxy(profile.proxy) : undefined,
+    geolocation,
+    permissions: geolocation ? ['geolocation'] : [],
     args: [
       '--disable-blink-features=AutomationControlled',
       '--disable-features=IsolateOrigins,site-per-process',
@@ -187,6 +198,31 @@ export function getRunningBrowsers(): string[] {
 export async function stopAllBrowsers(): Promise<void> {
   const promises = Array.from(activeBrowsers.keys()).map(id => stopBrowser(id));
   await Promise.all(promises);
+}
+
+/**
+ * Navigate to URL in running browser
+ */
+export async function navigateToUrl(profileId: string, url: string): Promise<boolean> {
+  const instance = activeBrowsers.get(profileId);
+  if (!instance) {
+    return false;
+  }
+
+  try {
+    const pages = instance.context.pages();
+    if (pages.length > 0) {
+      await pages[0].goto(url);
+      await pages[0].bringToFront();
+    } else {
+      const page = await instance.context.newPage();
+      await page.goto(url);
+    }
+    return true;
+  } catch (e) {
+    console.error('Failed to navigate:', e);
+    return false;
+  }
 }
 
 /**

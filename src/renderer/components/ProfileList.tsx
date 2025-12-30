@@ -8,18 +8,26 @@ interface ProfileWithStatus extends Profile {
 
 interface ProfileListProps {
   profiles: ProfileWithStatus[];
+  selectedIds: Set<string>;
+  onSelect: (id: string, selected: boolean) => void;
+  onSelectAll: (selected: boolean) => void;
   onEdit: (profile: ProfileWithStatus) => void;
   onDelete: (id: string) => void;
   onLaunch: (id: string) => void;
   onStop: (id: string) => void;
+  onCheckFingerprint: (id: string) => void;
 }
 
 export function ProfileList({
   profiles,
+  selectedIds,
+  onSelect,
+  onSelectAll,
   onEdit,
   onDelete,
   onLaunch,
   onStop,
+  onCheckFingerprint,
 }: ProfileListProps) {
   if (profiles.length === 0) {
     return (
@@ -34,31 +42,57 @@ export function ProfileList({
     );
   }
 
+  const allSelected = profiles.length > 0 && profiles.every(p => selectedIds.has(p.id));
+  const someSelected = selectedIds.size > 0;
+
   return (
-    <div className="profile-grid">
-      {profiles.map(profile => (
-        <ProfileCard
-          key={profile.id}
-          profile={profile}
-          onEdit={() => onEdit(profile)}
-          onDelete={() => onDelete(profile.id)}
-          onLaunch={() => onLaunch(profile.id)}
-          onStop={() => onStop(profile.id)}
-        />
-      ))}
+    <div className="profile-list-container">
+      {profiles.length > 1 && (
+        <div className="list-toolbar">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={e => onSelectAll(e.target.checked)}
+            />
+            <span>Select all ({profiles.length})</span>
+          </label>
+          {someSelected && (
+            <span className="selected-count">{selectedIds.size} selected</span>
+          )}
+        </div>
+      )}
+      <div className="profile-grid">
+        {profiles.map(profile => (
+          <ProfileCard
+            key={profile.id}
+            profile={profile}
+            selected={selectedIds.has(profile.id)}
+            onSelect={(selected) => onSelect(profile.id, selected)}
+            onEdit={() => onEdit(profile)}
+            onDelete={() => onDelete(profile.id)}
+            onLaunch={() => onLaunch(profile.id)}
+            onStop={() => onStop(profile.id)}
+            onCheckFingerprint={() => onCheckFingerprint(profile.id)}
+          />
+        ))}
+      </div>
     </div>
   );
 }
 
 interface ProfileCardProps {
   profile: ProfileWithStatus;
+  selected: boolean;
+  onSelect: (selected: boolean) => void;
   onEdit: () => void;
   onDelete: () => void;
   onLaunch: () => void;
   onStop: () => void;
+  onCheckFingerprint: () => void;
 }
 
-function ProfileCard({ profile, onEdit, onDelete, onLaunch, onStop }: ProfileCardProps) {
+function ProfileCard({ profile, selected, onSelect, onEdit, onDelete, onLaunch, onStop, onCheckFingerprint }: ProfileCardProps) {
   const getOsIcon = () => {
     const ua = profile.fingerprint.userAgent.toLowerCase();
     if (ua.includes('windows')) return '🪟';
@@ -78,9 +112,34 @@ function ProfileCard({ profile, onEdit, onDelete, onLaunch, onStop }: ProfileCar
     });
   };
 
+  const getLocationName = () => {
+    const geo = profile.fingerprint.geolocation;
+    if (!geo?.enabled) return 'Disabled';
+    // Simple reverse lookup based on timezone
+    const tz = profile.fingerprint.timezone;
+    const cities: { [key: string]: string } = {
+      'America/New_York': 'New York',
+      'America/Los_Angeles': 'Los Angeles',
+      'America/Chicago': 'Chicago',
+      'Europe/London': 'London',
+      'Europe/Paris': 'Paris',
+      'Europe/Berlin': 'Berlin',
+      'Europe/Moscow': 'Moscow',
+      'Asia/Tokyo': 'Tokyo',
+    };
+    return cities[tz] || tz.split('/')[1] || 'Custom';
+  };
+
   return (
-    <div className={`profile-card ${profile.isRunning ? 'running' : ''}`}>
+    <div className={`profile-card ${profile.isRunning ? 'running' : ''} ${selected ? 'selected' : ''}`}>
       <div className="profile-header">
+        <label className="profile-checkbox" onClick={e => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={e => onSelect(e.target.checked)}
+          />
+        </label>
         <div className="profile-avatar">
           {profile.name.charAt(0).toUpperCase()}
         </div>
@@ -107,14 +166,18 @@ function ProfileCard({ profile, onEdit, onDelete, onLaunch, onStop }: ProfileCar
           </span>
         </div>
         <div className="detail-row">
-          <span className="detail-label">Last used</span>
-          <span className="detail-value">{formatDate(profile.lastUsed)}</span>
+          <span className="detail-label">Location</span>
+          <span className="detail-value">{getLocationName()}</span>
         </div>
         <div className="detail-row">
           <span className="detail-label">Screen</span>
           <span className="detail-value">
             {profile.fingerprint.screen.width}x{profile.fingerprint.screen.height}
           </span>
+        </div>
+        <div className="detail-row">
+          <span className="detail-label">Last used</span>
+          <span className="detail-value">{formatDate(profile.lastUsed)}</span>
         </div>
       </div>
 
@@ -134,6 +197,17 @@ function ProfileCard({ profile, onEdit, onDelete, onLaunch, onStop }: ProfileCar
             Start
           </button>
         )}
+        <button
+          className="btn btn-secondary btn-icon"
+          onClick={onCheckFingerprint}
+          title="Check Fingerprint"
+          disabled={!profile.isRunning}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+            <path d="M12 2a10 10 0 1010 10A10 10 0 0012 2z" />
+            <path d="M12 6v6l4 2" />
+          </svg>
+        </button>
         <button className="btn btn-secondary btn-icon" onClick={onEdit} title="Edit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />

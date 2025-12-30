@@ -261,3 +261,18 @@
 .proxy-status.loading {
   color: var(--text-muted);
 }
+
+/* Mass Actions */
+.mass-actions {
+  display: flex;
+  gap: 8px;
+  padding-right: 16px;
+  border-right: 1px solid var(--border);
+  margin-right: 4px;
+}
+
+.mass-actions .btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

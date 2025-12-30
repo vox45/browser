@@ -398,6 +398,33 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     });
   }
 
+  // ==================== Geolocation ====================
+  if (fp.geolocation && fp.geolocation.enabled) {
+    const fakePosition = {
+      coords: {
+        latitude: fp.geolocation.latitude,
+        longitude: fp.geolocation.longitude,
+        accuracy: fp.geolocation.accuracy,
+        altitude: null,
+        altitudeAccuracy: null,
+        heading: null,
+        speed: null,
+      },
+      timestamp: Date.now(),
+    };
+
+    navigator.geolocation.getCurrentPosition = function(success, error, options) {
+      setTimeout(() => success(fakePosition), 100);
+    };
+
+    navigator.geolocation.watchPosition = function(success, error, options) {
+      setTimeout(() => success(fakePosition), 100);
+      return Math.floor(Math.random() * 10000);
+    };
+
+    navigator.geolocation.clearWatch = function(id) {};
+  }
+
   console.log('[Antidetect] Fingerprint injected successfully');
 })();
 `;

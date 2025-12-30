@@ -7,6 +7,7 @@ import {
   AudioConfig,
   WebRTCConfig,
   MediaDevicesConfig,
+  GeolocationConfig,
 } from '../core/types';
 
 // User Agent data
@@ -65,6 +66,22 @@ const TIMEZONES = [
   'Asia/Singapore',
   'Australia/Sydney',
 ];
+
+// Geolocation data matching timezones
+const GEOLOCATIONS: { [key: string]: { lat: number; lng: number; city: string } } = {
+  'America/New_York': { lat: 40.7128, lng: -74.0060, city: 'New York' },
+  'America/Los_Angeles': { lat: 34.0522, lng: -118.2437, city: 'Los Angeles' },
+  'America/Chicago': { lat: 41.8781, lng: -87.6298, city: 'Chicago' },
+  'America/Denver': { lat: 39.7392, lng: -104.9903, city: 'Denver' },
+  'Europe/London': { lat: 51.5074, lng: -0.1278, city: 'London' },
+  'Europe/Paris': { lat: 48.8566, lng: 2.3522, city: 'Paris' },
+  'Europe/Berlin': { lat: 52.5200, lng: 13.4050, city: 'Berlin' },
+  'Europe/Moscow': { lat: 55.7558, lng: 37.6173, city: 'Moscow' },
+  'Asia/Tokyo': { lat: 35.6762, lng: 139.6503, city: 'Tokyo' },
+  'Asia/Shanghai': { lat: 31.2304, lng: 121.4737, city: 'Shanghai' },
+  'Asia/Singapore': { lat: 1.3521, lng: 103.8198, city: 'Singapore' },
+  'Australia/Sydney': { lat: -33.8688, lng: 151.2093, city: 'Sydney' },
+};
 
 const SCREEN_RESOLUTIONS: ScreenConfig[] = [
   { width: 1920, height: 1080, availWidth: 1920, availHeight: 1040, colorDepth: 24, pixelDepth: 24, devicePixelRatio: 1 },
@@ -231,6 +248,20 @@ export function generateMediaDevices(): MediaDevicesConfig {
   };
 }
 
+export function generateGeolocation(timezone: string): GeolocationConfig {
+  const geo = GEOLOCATIONS[timezone] || GEOLOCATIONS['America/New_York'];
+  // Add small random offset to coordinates (within ~10km)
+  const latOffset = (Math.random() - 0.5) * 0.1;
+  const lngOffset = (Math.random() - 0.5) * 0.1;
+
+  return {
+    enabled: true,
+    latitude: geo.lat + latOffset,
+    longitude: geo.lng + lngOffset,
+    accuracy: randomInt(10, 100),
+  };
+}
+
 export function generateHardwareConcurrency(): number {
   const values = [2, 4, 6, 8, 12, 16];
   return randomItem(values);
@@ -251,6 +282,7 @@ export function generateFingerprint(options: GenerateFingerprintOptions = {}): F
   const { os = 'windows', webrtcMode = 'disabled' } = options;
 
   const { language, languages } = generateLanguage();
+  const timezone = generateTimezone();
 
   return {
     userAgent: generateUserAgent(os),
@@ -264,10 +296,11 @@ export function generateFingerprint(options: GenerateFingerprintOptions = {}): F
     webgl: generateWebGL(),
     canvas: generateCanvas(),
     audio: generateAudio(),
-    timezone: generateTimezone(),
+    timezone,
     fonts: generateFonts(),
     webrtc: generateWebRTC(webrtcMode),
     clientRectsNoise: randomFloat(0.1, 2),
     mediaDevices: generateMediaDevices(),
+    geolocation: generateGeolocation(timezone),
   };
 }

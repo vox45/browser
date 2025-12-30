@@ -46,6 +46,16 @@ export interface Fingerprint {
 
   // Media devices
   mediaDevices: MediaDevicesConfig;
+
+  // Geolocation
+  geolocation: GeolocationConfig;
+}
+
+export interface GeolocationConfig {
+  enabled: boolean;
+  latitude: number;
+  longitude: number;
+  accuracy: number;
 }
 
 export interface ScreenConfig {
