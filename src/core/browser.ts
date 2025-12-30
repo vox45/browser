@@ -100,6 +100,9 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-infobars',
+      // Allow access to chrome:// pages
+      '--allow-running-insecure-content',
+      '--disable-web-security',
       `--window-size=${profile.fingerprint.screen.width},${profile.fingerprint.screen.height}`,
     ],
     ignoreDefaultArgs: ['--enable-automation'],
@@ -211,13 +214,20 @@ export async function navigateToUrl(profileId: string, url: string): Promise<boo
 
   try {
     const pages = instance.context.pages();
-    if (pages.length > 0) {
-      await pages[0].goto(url);
-      await pages[0].bringToFront();
-    } else {
-      const page = await instance.context.newPage();
-      await page.goto(url);
+    let page = pages.length > 0 ? pages[0] : await instance.context.newPage();
+    await page.bringToFront();
+
+    // Handle chrome:// URLs - need to type in address bar since Playwright blocks them
+    if (url.startsWith('chrome://')) {
+      // Focus address bar and type URL
+      await page.keyboard.press('Control+l'); // Focus address bar
+      await page.waitForTimeout(100);
+      await page.keyboard.type(url, { delay: 10 });
+      await page.keyboard.press('Enter');
+      return true;
     }
+
+    await page.goto(url);
     return true;
   } catch (e) {
     console.error('Failed to navigate:', e);
