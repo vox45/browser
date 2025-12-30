@@ -109,9 +109,17 @@ function App() {
     }
   };
 
-  const handleCheckFingerprint = async (id: string) => {
+  const handleCheckFingerprint = async (id: string, site?: string) => {
+    const checkSites: { [key: string]: string } = {
+      browserleaks: 'https://browserleaks.com/',
+      creepjs: 'https://abrahamjuliot.github.io/creepjs/',
+      pixelscan: 'https://pixelscan.net/',
+      iphey: 'https://iphey.com/',
+    };
+    const url = site ? checkSites[site] || checkSites.browserleaks : checkSites.browserleaks;
+
     try {
-      const result = await window.api.navigateToUrl(id, 'https://browserleaks.com/canvas');
+      const result = await window.api.navigateToUrl(id, url);
       if ('error' in result) {
         alert(`Failed to open fingerprint check: ${result.error}`);
       }

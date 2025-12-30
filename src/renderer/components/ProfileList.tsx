@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Profile } from '../../core/types';
 import './ProfileList.css';
 
@@ -15,7 +15,7 @@ interface ProfileListProps {
   onDelete: (id: string) => void;
   onLaunch: (id: string) => void;
   onStop: (id: string) => void;
-  onCheckFingerprint: (id: string) => void;
+  onCheckFingerprint: (id: string, site?: string) => void;
 }
 
 export function ProfileList({
@@ -73,7 +73,7 @@ export function ProfileList({
             onDelete={() => onDelete(profile.id)}
             onLaunch={() => onLaunch(profile.id)}
             onStop={() => onStop(profile.id)}
-            onCheckFingerprint={() => onCheckFingerprint(profile.id)}
+            onCheckFingerprint={(site) => onCheckFingerprint(profile.id, site)}
           />
         ))}
       </div>
@@ -89,10 +89,19 @@ interface ProfileCardProps {
   onDelete: () => void;
   onLaunch: () => void;
   onStop: () => void;
-  onCheckFingerprint: () => void;
+  onCheckFingerprint: (site?: string) => void;
 }
 
 function ProfileCard({ profile, selected, onSelect, onEdit, onDelete, onLaunch, onStop, onCheckFingerprint }: ProfileCardProps) {
+  const [showCheckMenu, setShowCheckMenu] = useState(false);
+
+  const checkSites = [
+    { id: 'browserleaks', name: 'BrowserLeaks', icon: '🔍' },
+    { id: 'creepjs', name: 'CreepJS', icon: '👻' },
+    { id: 'pixelscan', name: 'Pixelscan', icon: '📡' },
+    { id: 'iphey', name: 'Iphey', icon: '🛡️' },
+  ];
+
   const getOsIcon = () => {
     const ua = profile.fingerprint.userAgent.toLowerCase();
     if (ua.includes('windows')) return '🪟';
@@ -197,17 +206,37 @@ function ProfileCard({ profile, selected, onSelect, onEdit, onDelete, onLaunch, 
             Start
           </button>
         )}
-        <button
-          className="btn btn-secondary btn-icon"
-          onClick={onCheckFingerprint}
-          title="Check Fingerprint"
-          disabled={!profile.isRunning}
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
-            <path d="M12 2a10 10 0 1010 10A10 10 0 0012 2z" />
-            <path d="M12 6v6l4 2" />
-          </svg>
-        </button>
+        <div className="dropdown-container">
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => setShowCheckMenu(!showCheckMenu)}
+            title="Check Fingerprint"
+            disabled={!profile.isRunning}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3" />
+              <circle cx="12" cy="17" r="0.5" fill="currentColor" />
+            </svg>
+          </button>
+          {showCheckMenu && (
+            <div className="dropdown-menu">
+              {checkSites.map(site => (
+                <button
+                  key={site.id}
+                  className="dropdown-item"
+                  onClick={() => {
+                    onCheckFingerprint(site.id);
+                    setShowCheckMenu(false);
+                  }}
+                >
+                  <span>{site.icon}</span>
+                  <span>{site.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         <button className="btn btn-secondary btn-icon" onClick={onEdit} title="Edit">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
             <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
