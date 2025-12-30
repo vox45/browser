@@ -100,9 +100,6 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
       '--no-first-run',
       '--no-default-browser-check',
       '--disable-infobars',
-      // Allow access to chrome:// pages
-      '--allow-running-insecure-content',
-      '--disable-web-security',
       `--window-size=${profile.fingerprint.screen.width},${profile.fingerprint.screen.height}`,
     ],
     ignoreDefaultArgs: ['--enable-automation'],
