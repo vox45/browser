@@ -100,7 +100,15 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
       '--disable-infobars',
       `--window-size=${profile.fingerprint.screen.width},${profile.fingerprint.screen.height}`,
     ],
-    ignoreDefaultArgs: ['--enable-automation'],
+    // Ignore Playwright default args that break chrome:// pages
+    ignoreDefaultArgs: [
+      '--enable-automation',
+      '--disable-extensions',
+      '--disable-component-extensions-with-background-pages',
+      '--disable-background-networking',
+      '--disable-component-update',
+      '--disable-default-apps',
+    ],
   });
 
   // Inject fingerprint script before any page loads
