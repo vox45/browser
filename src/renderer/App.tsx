@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ProfileList } from './components/ProfileList';
 import { ProfileModal } from './components/ProfileModal';
+import { SettingsPage } from './components/SettingsPage';
 import { Profile } from '../core/types';
 import './styles/app.css';
 
@@ -9,12 +10,15 @@ interface ProfileWithStatus extends Profile {
   isRunning: boolean;
 }
 
+type Page = 'profiles' | 'running' | 'settings';
+
 function App() {
   const [profiles, setProfiles] = useState<ProfileWithStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ProfileWithStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [currentPage, setCurrentPage] = useState<Page>('profiles');
 
   const loadProfiles = useCallback(async () => {
     try {
@@ -31,8 +35,8 @@ function App() {
 
   useEffect(() => {
     loadProfiles();
-    // Refresh every 5 seconds to update running status
-    const interval = setInterval(loadProfiles, 5000);
+    // Refresh every 3 seconds to update running status
+    const interval = setInterval(loadProfiles, 3000);
     return () => clearInterval(interval);
   }, [loadProfiles]);
 
@@ -63,7 +67,6 @@ function App() {
       if ('error' in result) {
         alert(`Failed to launch: ${result.error}`);
       } else {
-        // Update running status
         setProfiles(prev =>
           prev.map(p => (p.id === id ? { ...p, isRunning: true } : p))
         );
@@ -92,7 +95,6 @@ function App() {
   }) => {
     try {
       if (editingProfile) {
-        // Update existing profile
         const result = await window.api.updateProfile({
           id: editingProfile.id,
           name: data.name,
@@ -109,7 +111,6 @@ function App() {
           prev.map(p => (p.id === editingProfile.id ? { ...result, isRunning: p.isRunning } : p))
         );
       } else {
-        // Create new profile
         const result = await window.api.createProfile({
           name: data.name,
           os: data.os as 'windows' | 'macos' | 'linux',
@@ -136,40 +137,51 @@ function App() {
     p.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const runningCount = profiles.filter(p => p.isRunning).length;
+  const runningProfiles = profiles.filter(p => p.isRunning);
+  const runningCount = runningProfiles.length;
 
-  return (
-    <div className="app">
-      <Sidebar
-        totalProfiles={profiles.length}
-        runningProfiles={runningCount}
-      />
-      <main className="main-content">
+  const renderContent = () => {
+    if (currentPage === 'settings') {
+      return <SettingsPage />;
+    }
+
+    const displayProfiles = currentPage === 'running' ? runningProfiles : filteredProfiles;
+    const title = currentPage === 'running' ? 'Running' : 'Profiles';
+    const count = currentPage === 'running' ? runningCount : profiles.length;
+
+    return (
+      <>
         <header className="header">
           <div className="header-left">
-            <h1>Profiles</h1>
-            <span className="profile-count">{profiles.length} profiles</span>
+            <h1>{title}</h1>
+            <span className="profile-count">
+              {count} {currentPage === 'running' ? 'running' : 'profiles'}
+            </span>
           </div>
           <div className="header-right">
-            <div className="search-box">
-              <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="11" cy="11" r="8" />
-                <path d="M21 21l-4.35-4.35" />
-              </svg>
-              <input
-                type="text"
-                className="input search-input"
-                placeholder="Search profiles..."
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-              />
-            </div>
-            <button className="btn btn-primary" onClick={handleCreateProfile}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
-                <path d="M12 5v14M5 12h14" />
-              </svg>
-              New Profile
-            </button>
+            {currentPage === 'profiles' && (
+              <>
+                <div className="search-box">
+                  <svg className="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="M21 21l-4.35-4.35" />
+                  </svg>
+                  <input
+                    type="text"
+                    className="input search-input"
+                    placeholder="Search profiles..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                  />
+                </div>
+                <button className="btn btn-primary" onClick={handleCreateProfile}>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  New Profile
+                </button>
+              </>
+            )}
           </div>
         </header>
 
@@ -178,15 +190,38 @@ function App() {
             <div className="spinner"></div>
             <p>Loading profiles...</p>
           </div>
+        ) : currentPage === 'running' && runningCount === 0 ? (
+          <div className="empty-state">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="64" height="64">
+              <circle cx="12" cy="12" r="10" />
+              <polygon points="10,8 16,12 10,16" fill="currentColor" />
+            </svg>
+            <h3>No running browsers</h3>
+            <p>Start a profile to see it here</p>
+          </div>
         ) : (
           <ProfileList
-            profiles={filteredProfiles}
+            profiles={displayProfiles}
             onEdit={handleEditProfile}
             onDelete={handleDeleteProfile}
             onLaunch={handleLaunchProfile}
             onStop={handleStopProfile}
           />
         )}
+      </>
+    );
+  };
+
+  return (
+    <div className="app">
+      <Sidebar
+        totalProfiles={profiles.length}
+        runningProfiles={runningCount}
+        currentPage={currentPage}
+        onNavigate={setCurrentPage}
+      />
+      <main className="main-content">
+        {renderContent()}
       </main>
 
       {modalOpen && (
