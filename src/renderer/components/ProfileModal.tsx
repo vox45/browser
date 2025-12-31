@@ -1,6 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Profile, Fingerprint } from '../../core/types';
 
+// Screen resolution presets
+const SCREEN_PRESETS = [
+  { label: '1920×1080 (Full HD)', width: 1920, height: 1080 },
+  { label: '1366×768 (HD)', width: 1366, height: 768 },
+  { label: '1536×864', width: 1536, height: 864 },
+  { label: '1440×900', width: 1440, height: 900 },
+  { label: '1280×720 (HD)', width: 1280, height: 720 },
+  { label: '2560×1440 (2K)', width: 2560, height: 1440 },
+  { label: '1680×1050', width: 1680, height: 1050 },
+  { label: '1600×900', width: 1600, height: 900 },
+  { label: '3840×2160 (4K)', width: 3840, height: 2160 },
+  { label: '2880×1800 (Retina)', width: 2880, height: 1800 },
+  { label: '1920×1200', width: 1920, height: 1200 },
+];
+
 interface ProfileWithStatus extends Profile {
   isRunning: boolean;
 }
@@ -16,6 +31,8 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
   const [os, setOs] = useState<'windows' | 'macos' | 'linux'>('windows');
   const [proxy, setProxy] = useState('');
   const [notes, setNotes] = useState(profile?.notes || '');
+  const [useRandomScreen, setUseRandomScreen] = useState(true);
+  const [screenResolution, setScreenResolution] = useState<{ width: number; height: number }>(SCREEN_PRESETS[0]);
   const [proxyStatus, setProxyStatus] = useState<{
     testing: boolean;
     success?: boolean;
@@ -46,7 +63,8 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
 
   const generateNewFingerprint = async () => {
     try {
-      const fp = await window.api.generateFingerprint({ os });
+      const screenOption = useRandomScreen ? null : screenResolution;
+      const fp = await window.api.generateFingerprint({ os, screen: screenOption });
       setFingerprint(fp);
     } catch (error) {
       console.error('Failed to generate fingerprint:', error);
@@ -57,7 +75,25 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
     setOs(newOs);
     if (!profile) {
       // Only regenerate for new profiles
-      const fp = await window.api.generateFingerprint({ os: newOs });
+      const screenOption = useRandomScreen ? null : screenResolution;
+      const fp = await window.api.generateFingerprint({ os: newOs, screen: screenOption });
+      setFingerprint(fp);
+    }
+  };
+
+  const handleScreenChange = async (preset: typeof SCREEN_PRESETS[0]) => {
+    setScreenResolution(preset);
+    if (!profile) {
+      const fp = await window.api.generateFingerprint({ os, screen: preset });
+      setFingerprint(fp);
+    }
+  };
+
+  const handleRandomScreenToggle = async (useRandom: boolean) => {
+    setUseRandomScreen(useRandom);
+    if (!profile) {
+      const screenOption = useRandom ? null : screenResolution;
+      const fp = await window.api.generateFingerprint({ os, screen: screenOption });
       setFingerprint(fp);
     }
   };
@@ -149,6 +185,39 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
                   >
                     🐧 Linux
                   </button>
+                </div>
+              </div>
+            )}
+
+            {!profile && (
+              <div className="form-group">
+                <label className="label">Screen Resolution</label>
+                <div className="screen-resolution-group">
+                  <label className="checkbox-label" style={{ marginBottom: '8px' }}>
+                    <input
+                      type="checkbox"
+                      checked={useRandomScreen}
+                      onChange={e => handleRandomScreenToggle(e.target.checked)}
+                    />
+                    <span>Random (recommended for uniqueness)</span>
+                  </label>
+                  {!useRandomScreen && (
+                    <select
+                      className="input"
+                      value={`${screenResolution.width}x${screenResolution.height}`}
+                      onChange={e => {
+                        const [w, h] = e.target.value.split('x').map(Number);
+                        const preset = SCREEN_PRESETS.find(p => p.width === w && p.height === h);
+                        if (preset) handleScreenChange(preset);
+                      }}
+                    >
+                      {SCREEN_PRESETS.map(preset => (
+                        <option key={`${preset.width}x${preset.height}`} value={`${preset.width}x${preset.height}`}>
+                          {preset.label}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </div>
               </div>
             )}

@@ -423,18 +423,41 @@ function generateUserAgent(rng: SeededRandom, os: 'windows' | 'macos' | 'linux')
   return { userAgent, appVersion, chromeVersion };
 }
 
-function generateScreen(rng: SeededRandom): ScreenConfig {
-  const config = rng.pickOne(SCREEN_CONFIGS);
+function generateScreen(rng: SeededRandom, customScreen?: { width: number; height: number } | null): ScreenConfig {
+  let width: number;
+  let height: number;
+  let dpr: number;
+
+  if (customScreen) {
+    // Use custom screen resolution
+    width = customScreen.width;
+    height = customScreen.height;
+    // Pick appropriate DPR based on resolution
+    if (width >= 3840) {
+      dpr = rng.pickOne([1.5, 2]);
+    } else if (width >= 2560) {
+      dpr = rng.pickOne([1, 1.25]);
+    } else {
+      dpr = rng.pickOne([1, 1.25, 1.5]);
+    }
+  } else {
+    // Random screen config
+    const config = rng.pickOne(SCREEN_CONFIGS);
+    width = config.width;
+    height = config.height;
+    dpr = config.dpr;
+  }
+
   const taskbarHeight = rng.nextInt(32, 48);
 
   return {
-    width: config.width,
-    height: config.height,
-    availWidth: config.width,
-    availHeight: config.height - taskbarHeight,
+    width,
+    height,
+    availWidth: width,
+    availHeight: height - taskbarHeight,
     colorDepth: rng.pickOne([24, 30, 32]),
     pixelDepth: rng.pickOne([24, 30, 32]),
-    devicePixelRatio: config.dpr,
+    devicePixelRatio: dpr,
     orientation: 'landscape-primary',
     isExtended: rng.nextBool() && rng.nextBool(), // 25% chance
   };
@@ -662,13 +685,32 @@ function generateStorageQuota(rng: SeededRandom): StorageQuotaConfig {
 }
 
 // Main fingerprint generator
+// Screen resolution presets for UI
+export const SCREEN_PRESETS = [
+  { label: '1920×1080 (Full HD)', width: 1920, height: 1080 },
+  { label: '1366×768 (HD)', width: 1366, height: 768 },
+  { label: '1536×864', width: 1536, height: 864 },
+  { label: '1440×900', width: 1440, height: 900 },
+  { label: '1280×720 (HD)', width: 1280, height: 720 },
+  { label: '2560×1440 (2K)', width: 2560, height: 1440 },
+  { label: '1680×1050', width: 1680, height: 1050 },
+  { label: '1600×900', width: 1600, height: 900 },
+  { label: '3840×2160 (4K)', width: 3840, height: 2160 },
+  { label: '2880×1800 (Retina)', width: 2880, height: 1800 },
+  { label: '1920×1200', width: 1920, height: 1200 },
+];
+
 export interface GenerateFingerprintOptions {
   os?: 'windows' | 'macos' | 'linux';
   webrtcMode?: 'real' | 'disabled' | 'fake';
+  screen?: {
+    width: number;
+    height: number;
+  } | null; // null = random
 }
 
 export function generateFingerprint(options: GenerateFingerprintOptions = {}): Fingerprint {
-  const { os = 'windows', webrtcMode = 'disabled' } = options;
+  const { os = 'windows', webrtcMode = 'disabled', screen: customScreen } = options;
 
   // Generate unique seed
   const seed = uuidv4() + '-' + Date.now().toString(36) + '-' + Math.random().toString(36);
@@ -732,7 +774,7 @@ export function generateFingerprint(options: GenerateFingerprintOptions = {}): F
     cookieEnabled: true,
     pdfViewerEnabled: true,
 
-    screen: generateScreen(rng),
+    screen: generateScreen(rng, customScreen),
     webgl: generateWebGL(rng),
     canvas: generateCanvas(rng),
     audio: generateAudio(rng),

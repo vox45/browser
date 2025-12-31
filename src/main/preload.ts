@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('api', {
   navigateToUrl: (id: string, url: string) => ipcRenderer.invoke('browser:navigate', id, url),
 
   // Fingerprint
-  generateFingerprint: (options?: { os?: string }) =>
+  generateFingerprint: (options?: { os?: string; screen?: { width: number; height: number } | null }) =>
     ipcRenderer.invoke('fingerprint:generate', options),
 
   // Proxy
@@ -47,7 +47,7 @@ declare global {
       stopBrowser: (id: string) => Promise<{ success: boolean } | { error: string }>;
       getBrowserStatus: (id: string) => Promise<{ isRunning: boolean }>;
       navigateToUrl: (id: string, url: string) => Promise<{ success: boolean } | { error: string }>;
-      generateFingerprint: (options?: { os?: string }) => Promise<Fingerprint>;
+      generateFingerprint: (options?: { os?: string; screen?: { width: number; height: number } | null }) => Promise<Fingerprint>;
       testProxy: (proxy: ProxyConfig | string) => Promise<{
         success: boolean;
         ip?: string;
