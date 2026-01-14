@@ -15,22 +15,32 @@ export function Sidebar({ totalProfiles, runningProfiles, currentPage, onNavigat
     <aside className="sidebar">
       <div className="sidebar-header">
         <div className="logo">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="28" height="28">
-            <circle cx="12" cy="12" r="10" />
-            <path d="M12 6v6l4 2" />
-          </svg>
-          <span>Antidetect</span>
+          <div className="logo-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+          </div>
+          <div className="logo-text">
+            <span className="logo-title">Phantom</span>
+            <span className="logo-subtitle">Browser</span>
+          </div>
         </div>
       </div>
 
       <nav className="sidebar-nav">
+        <div className="nav-section-title">Main</div>
+
         <button
           className={`nav-item ${currentPage === 'profiles' ? 'active' : ''}`}
           onClick={() => onNavigate('profiles')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
-            <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-            <circle cx="12" cy="7" r="4" />
+            <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
+            <circle cx="9" cy="7" r="4" />
+            <path d="M23 21v-2a4 4 0 00-3-3.87" />
+            <path d="M16 3.13a4 4 0 010 7.75" />
           </svg>
           <span>Profiles</span>
           <span className="nav-badge">{totalProfiles}</span>
@@ -41,7 +51,8 @@ export function Sidebar({ totalProfiles, runningProfiles, currentPage, onNavigat
           onClick={() => onNavigate('running')}
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
-            <polygon points="5,3 19,12 5,21" fill={runningProfiles > 0 ? 'currentColor' : 'none'} />
+            <circle cx="12" cy="12" r="10" />
+            <polygon points="10,8 16,12 10,16" fill={runningProfiles > 0 ? 'currentColor' : 'none'} />
           </svg>
           <span>Running</span>
           {runningProfiles > 0 && (
@@ -50,6 +61,8 @@ export function Sidebar({ totalProfiles, runningProfiles, currentPage, onNavigat
         </button>
 
         <div className="nav-divider"></div>
+
+        <div className="nav-section-title">System</div>
 
         <button
           className={`nav-item ${currentPage === 'settings' ? 'active' : ''}`}
@@ -64,7 +77,13 @@ export function Sidebar({ totalProfiles, runningProfiles, currentPage, onNavigat
       </nav>
 
       <div className="sidebar-footer">
-        <div className="version">v1.0.0</div>
+        <div className="sidebar-footer-content">
+          <span className="version">v1.0.0</span>
+          <div className="sidebar-status">
+            <span className="status-dot"></span>
+            <span>Ready</span>
+          </div>
+        </div>
       </div>
     </aside>
   );

@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ProfileList } from './components/ProfileList';
 import { ProfileModal } from './components/ProfileModal';
 import { SettingsPage } from './components/SettingsPage';
+import { FingerprintTestModal } from './components/FingerprintTestModal';
 import { Profile } from '../core/types';
 import './styles/app.css';
 
@@ -17,6 +18,7 @@ function App() {
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingProfile, setEditingProfile] = useState<ProfileWithStatus | null>(null);
+  const [testingProfile, setTestingProfile] = useState<ProfileWithStatus | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState<Page>('profiles');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -36,7 +38,6 @@ function App() {
 
   useEffect(() => {
     loadProfiles();
-    // Refresh every 3 seconds to update running status
     const interval = setInterval(loadProfiles, 3000);
     return () => clearInterval(interval);
   }, [loadProfiles]);
@@ -49,6 +50,10 @@ function App() {
   const handleEditProfile = (profile: ProfileWithStatus) => {
     setEditingProfile(profile);
     setModalOpen(true);
+  };
+
+  const handleTestFingerprint = (profile: ProfileWithStatus) => {
+    setTestingProfile(profile);
   };
 
   const handleDeleteProfile = async (id: string) => {
@@ -266,10 +271,12 @@ function App() {
           </div>
         ) : currentPage === 'running' && runningCount === 0 ? (
           <div className="empty-state">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="64" height="64">
-              <circle cx="12" cy="12" r="10" />
-              <polygon points="10,8 16,12 10,16" fill="currentColor" />
-            </svg>
+            <div className="empty-state-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="36" height="36">
+                <circle cx="12" cy="12" r="10" />
+                <polygon points="10,8 16,12 10,16" fill="currentColor" />
+              </svg>
+            </div>
             <h3>No running browsers</h3>
             <p>Start a profile to see it here</p>
           </div>
@@ -284,6 +291,7 @@ function App() {
             onLaunch={handleLaunchProfile}
             onStop={handleStopProfile}
             onCheckFingerprint={handleCheckFingerprint}
+            onTestFingerprint={handleTestFingerprint}
           />
         )}
       </>
@@ -310,6 +318,14 @@ function App() {
             setModalOpen(false);
             setEditingProfile(null);
           }}
+        />
+      )}
+
+      {testingProfile && (
+        <FingerprintTestModal
+          profileId={testingProfile.id}
+          profileName={testingProfile.name}
+          onClose={() => setTestingProfile(null)}
         />
       )}
     </div>

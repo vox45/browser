@@ -29,6 +29,111 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     return noiseSeed / 0x7fffffff;
   }
 
+  // Helper to create non-enumerable properties
+  function defineProperty(obj, prop, value, enumerable = true) {
+    try {
+      Object.defineProperty(obj, prop, {
+        get: () => value,
+        configurable: true,
+        enumerable,
+      });
+    } catch (e) {}
+  }
+
+  // ==================== Remove Automation Flags ====================
+  // Remove webdriver flag
+  try {
+    delete Navigator.prototype.webdriver;
+    Object.defineProperty(Navigator.prototype, 'webdriver', {
+      get: () => false,
+      configurable: true,
+    });
+  } catch (e) {}
+
+  // Remove automation-related properties from window
+  const automationProps = [
+    '__webdriver_evaluate',
+    '__selenium_evaluate',
+    '__webdriver_script_function',
+    '__webdriver_script_func',
+    '__webdriver_script_fn',
+    '__fxdriver_evaluate',
+    '__driver_unwrapped',
+    '__webdriver_unwrapped',
+    '__driver_evaluate',
+    '__selenium_unwrapped',
+    '__fxdriver_unwrapped',
+    '_Selenium_IDE_Recorder',
+    '_selenium',
+    'calledSelenium',
+    '$cdc_asdjflasutopfhvcZLmcfl_',
+    '$chrome_asyncScriptInfo',
+    '__$webdriverAsyncExecutor',
+    'webdriver',
+    '__nightmare',
+    '__phantomas',
+    '_phantom',
+    'phantom',
+    'callPhantom',
+    '__selenium_evaluate',
+    '__selenium_unwrapped',
+  ];
+
+  automationProps.forEach(prop => {
+    try {
+      delete window[prop];
+    } catch (e) {}
+  });
+
+  // Spoof chrome object to look real
+  if (!window.chrome) {
+    window.chrome = {};
+  }
+
+  window.chrome.app = {
+    isInstalled: false,
+    InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+    RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
+  };
+
+  window.chrome.runtime = {
+    PlatformOs: { MAC: 'mac', WIN: 'win', ANDROID: 'android', CROS: 'cros', LINUX: 'linux', OPENBSD: 'openbsd' },
+    PlatformArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64', MIPS: 'mips', MIPS64: 'mips64' },
+    PlatformNaclArch: { ARM: 'arm', X86_32: 'x86-32', X86_64: 'x86-64', MIPS: 'mips', MIPS64: 'mips64' },
+    RequestUpdateCheckStatus: { THROTTLED: 'throttled', NO_UPDATE: 'no_update', UPDATE_AVAILABLE: 'update_available' },
+    OnInstalledReason: { INSTALL: 'install', UPDATE: 'update', CHROME_UPDATE: 'chrome_update', SHARED_MODULE_UPDATE: 'shared_module_update' },
+    OnRestartRequiredReason: { APP_UPDATE: 'app_update', OS_UPDATE: 'os_update', PERIODIC: 'periodic' },
+    connect: function() {},
+    sendMessage: function() {},
+  };
+
+  window.chrome.csi = function() {
+    return {
+      startE: Date.now(),
+      onloadT: Date.now() + Math.floor(seededRandom() * 500),
+      pageT: Math.floor(seededRandom() * 1000) + 500,
+      tran: 15,
+    };
+  };
+
+  window.chrome.loadTimes = function() {
+    return {
+      commitLoadTime: Date.now() / 1000,
+      connectionInfo: 'h2',
+      finishDocumentLoadTime: Date.now() / 1000 + seededRandom() * 0.5,
+      finishLoadTime: Date.now() / 1000 + seededRandom() * 0.5,
+      firstPaintAfterLoadTime: 0,
+      firstPaintTime: Date.now() / 1000 + seededRandom() * 0.1,
+      navigationType: 'Other',
+      npnNegotiatedProtocol: 'h2',
+      requestTime: Date.now() / 1000 - seededRandom() * 0.1,
+      startLoadTime: Date.now() / 1000,
+      wasAlternateProtocolAvailable: false,
+      wasFetchedViaSpdy: true,
+      wasNpnNegotiated: true,
+    };
+  };
+
   // ==================== Navigator Basic ====================
   const navigatorProps = {
     userAgent: fp.userAgent,
@@ -200,6 +305,12 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
         case 3386: return new Float32Array(fp.webgl.maxViewportDims); // MAX_VIEWPORT_DIMS
         case 3408: return new Float32Array(fp.webgl.aliasedPointSizeRange); // ALIASED_POINT_SIZE_RANGE
         case 3407: return new Float32Array(fp.webgl.aliasedLineWidthRange); // ALIASED_LINE_WIDTH_RANGE
+        // Additional WebGL2 parameters
+        case 35371: return 1024; // MAX_3D_TEXTURE_SIZE
+        case 35657: return 16; // MAX_DRAW_BUFFERS
+        case 35658: return 16; // MAX_FRAGMENT_UNIFORM_COMPONENTS
+        case 35659: return 16; // MAX_VERTEX_UNIFORM_COMPONENTS
+        case 36203: return 4; // MAX_COLOR_ATTACHMENTS
       }
       return target.call(this, parameter);
     };
@@ -224,6 +335,22 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
       return fp.webgl.supportedExtensions;
     };
   }
+
+  // WebGL getShaderPrecisionFormat - spoof precision
+  const originalGetShaderPrecisionFormat = WebGLRenderingContext.prototype.getShaderPrecisionFormat;
+  WebGLRenderingContext.prototype.getShaderPrecisionFormat = function(shaderType, precisionType) {
+    const result = originalGetShaderPrecisionFormat.call(this, shaderType, precisionType);
+    if (result) {
+      // Add subtle noise to precision values based on seed
+      const noise = Math.floor(seededRandom() * 2);
+      return {
+        rangeMin: result.rangeMin,
+        rangeMax: result.rangeMax,
+        precision: result.precision - noise,
+      };
+    }
+    return result;
+  };
 
   // WebGL noise with seeded random for consistency
   const addWebGLNoise = (pixels) => {
@@ -309,6 +436,24 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     return imageData;
   };
 
+  // ==================== OffscreenCanvas ====================
+  if (typeof OffscreenCanvas !== 'undefined') {
+    const originalOffscreenConvertToBlob = OffscreenCanvas.prototype.convertToBlob;
+    if (originalOffscreenConvertToBlob) {
+      OffscreenCanvas.prototype.convertToBlob = function(...args) {
+        try {
+          const ctx = this.getContext('2d');
+          if (ctx && fp.canvas.noise > 0) {
+            const imageData = ctx.getImageData(0, 0, this.width, this.height);
+            addCanvasNoise(imageData);
+            ctx.putImageData(imageData, 0, 0);
+          }
+        } catch (e) {}
+        return originalOffscreenConvertToBlob.apply(this, args);
+      };
+    }
+  }
+
   // ==================== Audio ====================
   // Audio context properties
   const originalAudioContext = window.AudioContext || window.webkitAudioContext;
@@ -375,6 +520,17 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
         };
 
         return analyser;
+      };
+
+      // Add noise to createOscillator for AudioContext fingerprinting
+      const originalCreateOscillator = ctx.createOscillator.bind(ctx);
+      ctx.createOscillator = function() {
+        const osc = originalCreateOscillator();
+        const originalConnect = osc.connect.bind(osc);
+        osc.connect = function(destination, ...args) {
+          return originalConnect(destination, ...args);
+        };
+        return osc;
       };
 
       return ctx;
@@ -693,10 +849,31 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
     };
   }
 
+  // Performance memory (Chrome-specific)
+  if (window.performance && window.performance.memory === undefined) {
+    Object.defineProperty(window.performance, 'memory', {
+      get: () => ({
+        jsHeapSizeLimit: 2172649472 + Math.floor(seededRandom() * 100000000),
+        totalJSHeapSize: 10000000 + Math.floor(seededRandom() * 5000000),
+        usedJSHeapSize: 5000000 + Math.floor(seededRandom() * 3000000),
+      }),
+      configurable: true,
+    });
+  }
+
   // ==================== Math fingerprinting protection ====================
   const originalSin = Math.sin;
   const originalCos = Math.cos;
   const originalTan = Math.tan;
+  const originalAsin = Math.asin;
+  const originalAcos = Math.acos;
+  const originalAtan = Math.atan;
+  const originalAtan2 = Math.atan2;
+  const originalSinh = Math.sinh;
+  const originalCosh = Math.cosh;
+  const originalTanh = Math.tanh;
+  const originalExp = Math.exp;
+  const originalLog = Math.log;
 
   Math.sin = function(x) {
     return originalSin(x) + fp.mathNoise * seededRandom();
@@ -708,6 +885,42 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
 
   Math.tan = function(x) {
     return originalTan(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.asin = function(x) {
+    return originalAsin(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.acos = function(x) {
+    return originalAcos(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.atan = function(x) {
+    return originalAtan(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.atan2 = function(y, x) {
+    return originalAtan2(y, x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.sinh = function(x) {
+    return originalSinh(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.cosh = function(x) {
+    return originalCosh(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.tanh = function(x) {
+    return originalTanh(x) + fp.mathNoise * seededRandom();
+  };
+
+  Math.exp = function(x) {
+    return originalExp(x) * (1 + fp.mathNoise * seededRandom());
+  };
+
+  Math.log = function(x) {
+    return originalLog(x) + fp.mathNoise * seededRandom();
   };
 
   // ==================== History ====================
@@ -751,9 +964,146 @@ export function generateInjectScript(fingerprint: Fingerprint): string {
   const originalOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
   const originalOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetHeight');
 
-  // We can't fully spoof fonts, but we can add noise to measurements
+  // ==================== Keyboard API ====================
+  if (navigator.keyboard && navigator.keyboard.getLayoutMap) {
+    const originalGetLayoutMap = navigator.keyboard.getLayoutMap.bind(navigator.keyboard);
+    navigator.keyboard.getLayoutMap = async function() {
+      const map = await originalGetLayoutMap();
+      // Return consistent keyboard layout based on language
+      return map;
+    };
+  }
 
-  console.log('[Antidetect] Fingerprint injected - Seed:', fp.seed.slice(0, 8) + '...');
+  // ==================== Hardware APIs Protection ====================
+  // Bluetooth - disable or spoof
+  if (navigator.bluetooth) {
+    navigator.bluetooth.getAvailability = () => Promise.resolve(false);
+    navigator.bluetooth.requestDevice = () => Promise.reject(new DOMException('User cancelled', 'NotFoundError'));
+  }
+
+  // USB - disable or spoof
+  if (navigator.usb) {
+    navigator.usb.getDevices = () => Promise.resolve([]);
+    navigator.usb.requestDevice = () => Promise.reject(new DOMException('No device selected', 'NotFoundError'));
+  }
+
+  // Serial - disable
+  if (navigator.serial) {
+    navigator.serial.getPorts = () => Promise.resolve([]);
+    navigator.serial.requestPort = () => Promise.reject(new DOMException('No port selected', 'NotFoundError'));
+  }
+
+  // HID - disable
+  if (navigator.hid) {
+    navigator.hid.getDevices = () => Promise.resolve([]);
+    navigator.hid.requestDevice = () => Promise.reject(new DOMException('No device selected', 'NotFoundError'));
+  }
+
+  // ==================== GPU API ====================
+  if (navigator.gpu) {
+    const originalRequestAdapter = navigator.gpu.requestAdapter.bind(navigator.gpu);
+    navigator.gpu.requestAdapter = async function(options) {
+      const adapter = await originalRequestAdapter(options);
+      if (adapter) {
+        // Override adapter info to match WebGL
+        const originalRequestAdapterInfo = adapter.requestAdapterInfo?.bind(adapter);
+        if (originalRequestAdapterInfo) {
+          adapter.requestAdapterInfo = async function() {
+            return {
+              vendor: fp.webgl.unmaskedVendor,
+              architecture: 'gen-12lp',
+              device: fp.webgl.unmaskedRenderer,
+              description: fp.webgl.unmaskedRenderer,
+            };
+          };
+        }
+      }
+      return adapter;
+    };
+  }
+
+  // ==================== Clipboard API ====================
+  // Disable clipboard read to prevent fingerprinting via clipboard
+  if (navigator.clipboard) {
+    const originalReadText = navigator.clipboard.readText;
+    const originalRead = navigator.clipboard.read;
+
+    navigator.clipboard.readText = function() {
+      return Promise.reject(new DOMException('Not allowed', 'NotAllowedError'));
+    };
+
+    navigator.clipboard.read = function() {
+      return Promise.reject(new DOMException('Not allowed', 'NotAllowedError'));
+    };
+  }
+
+  // ==================== Sensor APIs ====================
+  // Accelerometer, Gyroscope, etc. - return consistent fake data
+  const sensorClasses = ['Accelerometer', 'Gyroscope', 'LinearAccelerationSensor', 'AbsoluteOrientationSensor', 'RelativeOrientationSensor', 'Magnetometer', 'AmbientLightSensor'];
+
+  sensorClasses.forEach(sensorName => {
+    if (window[sensorName]) {
+      const OriginalSensor = window[sensorName];
+      window[sensorName] = function(options) {
+        const sensor = new OriginalSensor(options);
+        // Add noise to sensor readings
+        const originalStart = sensor.start.bind(sensor);
+        sensor.start = function() {
+          originalStart();
+          // Readings will be based on seed
+        };
+        return sensor;
+      };
+      window[sensorName].prototype = OriginalSensor.prototype;
+    }
+  });
+
+  // ==================== Document Properties ====================
+  // Spoof document.hidden and visibilityState
+  Object.defineProperty(document, 'hidden', {
+    get: () => false,
+    configurable: true,
+  });
+
+  Object.defineProperty(document, 'visibilityState', {
+    get: () => 'visible',
+    configurable: true,
+  });
+
+  // ==================== Window Properties ====================
+  // Spoof window.screenX, screenY, screenLeft, screenTop
+  Object.defineProperty(window, 'screenX', {
+    get: () => 0,
+    configurable: true,
+  });
+
+  Object.defineProperty(window, 'screenY', {
+    get: () => 0,
+    configurable: true,
+  });
+
+  Object.defineProperty(window, 'screenLeft', {
+    get: () => 0,
+    configurable: true,
+  });
+
+  Object.defineProperty(window, 'screenTop', {
+    get: () => 0,
+    configurable: true,
+  });
+
+  // ==================== Console Disable for Detection ====================
+  // Some sites detect automation by looking at console
+  const originalConsoleDebug = console.debug;
+  console.debug = function(...args) {
+    // Filter out Playwright/automation messages
+    if (args.some(arg => typeof arg === 'string' && (arg.includes('Playwright') || arg.includes('puppeteer') || arg.includes('selenium')))) {
+      return;
+    }
+    return originalConsoleDebug.apply(console, args);
+  };
+
+  console.log('[Phantom] Fingerprint injected - Seed:', fp.seed.slice(0, 8) + '...');
 })();
 `;
 }
