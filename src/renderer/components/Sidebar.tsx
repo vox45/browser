@@ -1,7 +1,7 @@
 import React from 'react';
 import './Sidebar.css';
 
-type Page = 'profiles' | 'running' | 'settings';
+type Page = 'profiles' | 'running' | 'automation' | 'settings';
 
 interface SidebarProps {
   totalProfiles: number;
@@ -58,6 +58,20 @@ export function Sidebar({ totalProfiles, runningProfiles, currentPage, onNavigat
           {runningProfiles > 0 && (
             <span className="nav-badge running">{runningProfiles}</span>
           )}
+        </button>
+
+        <div className="nav-divider"></div>
+
+        <div className="nav-section-title">Automation</div>
+
+        <button
+          className={`nav-item ${currentPage === 'automation' ? 'active' : ''}`}
+          onClick={() => onNavigate('automation')}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="20" height="20">
+            <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+          </svg>
+          <span>Bing Farming</span>
         </button>
 
         <div className="nav-divider"></div>

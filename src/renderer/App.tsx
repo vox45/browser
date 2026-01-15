@@ -4,6 +4,7 @@ import { ProfileList } from './components/ProfileList';
 import { ProfileModal } from './components/ProfileModal';
 import { SettingsPage } from './components/SettingsPage';
 import { FingerprintTestModal } from './components/FingerprintTestModal';
+import { AutomationPage } from './components/AutomationPage';
 import { Profile } from '../core/types';
 import './styles/app.css';
 
@@ -11,7 +12,7 @@ interface ProfileWithStatus extends Profile {
   isRunning: boolean;
 }
 
-type Page = 'profiles' | 'running' | 'settings';
+type Page = 'profiles' | 'running' | 'automation' | 'settings';
 
 function App() {
   const [profiles, setProfiles] = useState<ProfileWithStatus[]>([]);
@@ -210,6 +211,10 @@ function App() {
   const renderContent = () => {
     if (currentPage === 'settings') {
       return <SettingsPage />;
+    }
+
+    if (currentPage === 'automation') {
+      return <AutomationPage profiles={profiles} />;
     }
 
     const displayProfiles = currentPage === 'running' ? runningProfiles : filteredProfiles;

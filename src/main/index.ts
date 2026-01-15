@@ -267,3 +267,161 @@ ipcMain.handle('browser:navigate', async (_, id: string, url: string) => {
     return { error: error.message };
   }
 });
+
+// ==================== Farming Automation ====================
+import { farmBingRewards, FarmingConfig, FarmingProgress } from '../automation/farming';
+import { getBrowserContext } from '../core/browser';
+
+let farmingAbortController: AbortController | null = null;
+let isFarmingRunning = false;
+
+// Start farming for selected profiles
+ipcMain.handle('farming:start', async (event, data: {
+  profileIds: string[];
+  config: {
+    desktopSearches: number;
+    mobileSearches: number;
+    dailySet: boolean;
+  };
+  customQueries?: string[];
+}) => {
+  if (isFarmingRunning) {
+    return { error: 'Farming is already running' };
+  }
+
+  const { profileIds, config, customQueries } = data;
+
+  if (profileIds.length === 0) {
+    return { error: 'No profiles selected' };
+  }
+
+  isFarmingRunning = true;
+  farmingAbortController = new AbortController();
+
+  const farmingConfig: FarmingConfig = {
+    ...config,
+    delayBetweenSearches: { min: 4000, max: 8000 },
+    typingDelay: { min: 50, max: 150 },
+  };
+
+  // Send initial progress
+  mainWindow?.webContents.send('farming:progress', {
+    status: 'running',
+    totalProfiles: profileIds.length,
+    completedProfiles: 0,
+    log: [`Starting farming for ${profileIds.length} profiles...`],
+  });
+
+  try {
+    for (let i = 0; i < profileIds.length; i++) {
+      if (farmingAbortController?.signal.aborted) {
+        break;
+      }
+
+      const profileId = profileIds[i];
+      const profile = getProfile(profileId);
+
+      if (!profile) {
+        mainWindow?.webContents.send('farming:progress', {
+          log: [`Profile ${profileId} not found, skipping...`],
+        });
+        continue;
+      }
+
+      mainWindow?.webContents.send('farming:progress', {
+        currentProfile: profileId,
+        completedDesktop: 0,
+        completedMobile: 0,
+        dailySetCompleted: false,
+        log: [`Starting farming for profile: ${profile.name}`],
+      });
+
+      // Launch browser for this profile
+      try {
+        await launchBrowser(profile);
+
+        // Wait for browser to be ready
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        const context = getBrowserContext(profileId);
+        if (!context) {
+          mainWindow?.webContents.send('farming:progress', {
+            log: [`Failed to get browser context for ${profile.name}`],
+          });
+          continue;
+        }
+
+        // Run farming
+        const result = await farmBingRewards(
+          context,
+          farmingConfig,
+          customQueries,
+          (progress) => {
+            mainWindow?.webContents.send('farming:progress', progress);
+          }
+        );
+
+        // Update result with profile info
+        result.profileId = profileId;
+        result.profileName = profile.name;
+
+        mainWindow?.webContents.send('farming:progress', {
+          completedProfiles: i + 1,
+          log: [
+            `Completed ${profile.name}: ${result.desktopSearches} desktop, ${result.mobileSearches} mobile searches`,
+            result.dailySetCompleted ? 'Daily set completed' : 'Daily set not completed',
+          ],
+        });
+
+        // Close browser after farming
+        await stopBrowser(profileId);
+
+        // Wait between profiles
+        if (i < profileIds.length - 1) {
+          mainWindow?.webContents.send('farming:progress', {
+            log: ['Waiting before next profile...'],
+          });
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+
+      } catch (error: any) {
+        mainWindow?.webContents.send('farming:progress', {
+          log: [`Error farming ${profile.name}: ${error.message}`],
+        });
+        // Try to stop browser on error
+        try {
+          await stopBrowser(profileId);
+        } catch {
+          // Ignore
+        }
+      }
+    }
+
+    mainWindow?.webContents.send('farming:progress', {
+      status: 'completed',
+      currentProfile: null,
+      log: ['Farming session completed!'],
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    mainWindow?.webContents.send('farming:progress', {
+      status: 'error',
+      error: error.message,
+      log: [`Farming error: ${error.message}`],
+    });
+    return { error: error.message };
+  } finally {
+    isFarmingRunning = false;
+    farmingAbortController = null;
+  }
+});
+
+// Stop farming
+ipcMain.handle('farming:stop', async () => {
+  if (farmingAbortController) {
+    farmingAbortController.abort();
+  }
+  isFarmingRunning = false;
+  return { success: true };
+});

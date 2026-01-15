@@ -203,6 +203,14 @@ export function isBrowserRunning(profileId: string): boolean {
 }
 
 /**
+ * Get browser context for profile (used by farming automation)
+ */
+export function getBrowserContext(profileId: string): BrowserContext | null {
+  const instance = activeBrowsers.get(profileId);
+  return instance?.context || null;
+}
+
+/**
  * Get all running browsers
  */
 export function getRunningBrowsers(): string[] {

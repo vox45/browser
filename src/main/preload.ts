@@ -1,5 +1,8 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 import { Profile, Fingerprint, ProxyConfig } from '../core/types';
+
+// Farming progress callback storage
+const farmingProgressCallbacks = new Set<(event: IpcRendererEvent, data: any) => void>();
 
 // Expose API to renderer
 contextBridge.exposeInMainWorld('api', {
@@ -27,6 +30,26 @@ contextBridge.exposeInMainWorld('api', {
 
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+
+  // Farming Automation
+  startFarming: (data: {
+    profileIds: string[];
+    config: {
+      desktopSearches: number;
+      mobileSearches: number;
+      dailySet: boolean;
+    };
+    customQueries?: string[];
+  }) => ipcRenderer.invoke('farming:start', data),
+  stopFarming: () => ipcRenderer.invoke('farming:stop'),
+  onFarmingProgress: (callback: (event: IpcRendererEvent, data: any) => void) => {
+    farmingProgressCallbacks.add(callback);
+    ipcRenderer.on('farming:progress', callback);
+  },
+  offFarmingProgress: (callback: (event: IpcRendererEvent, data: any) => void) => {
+    farmingProgressCallbacks.delete(callback);
+    ipcRenderer.off('farming:progress', callback);
+  },
 });
 
 // Type declarations for renderer
@@ -56,6 +79,19 @@ declare global {
         error?: string;
       }>;
       openExternal: (url: string) => Promise<void>;
+      // Farming
+      startFarming: (data: {
+        profileIds: string[];
+        config: {
+          desktopSearches: number;
+          mobileSearches: number;
+          dailySet: boolean;
+        };
+        customQueries?: string[];
+      }) => Promise<{ success: boolean } | { error: string }>;
+      stopFarming: () => Promise<{ success: boolean }>;
+      onFarmingProgress?: (callback: (event: any, data: any) => void) => void;
+      offFarmingProgress?: (callback: (event: any, data: any) => void) => void;
     };
   }
 }
