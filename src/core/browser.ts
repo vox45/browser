@@ -10,33 +10,43 @@ import { getPlaywrightProxy } from '../proxy/manager';
 const activeBrowsers: Map<string, BrowserInstance> = new Map();
 
 /**
- * Get Chromium executable path
+ * Get Chromium executable path - prioritize Chromium over Chrome
  */
 function getChromiumPath(): string {
-  // Try to find system Chrome/Chromium
+  // Try to find system Chromium first, then Chrome as fallback
   const possiblePaths = [
-    // Windows
-    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-    process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
-    // macOS
-    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-    '/Applications/Chromium.app/Contents/MacOS/Chromium',
-    // Linux
-    '/usr/bin/google-chrome',
-    '/usr/bin/google-chrome-stable',
+    // Linux - Chromium first
     '/usr/bin/chromium',
     '/usr/bin/chromium-browser',
+    '/snap/bin/chromium',
+    // Linux - Chrome fallback
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    // macOS - Chromium first
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    // macOS - Chrome fallback
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    // Windows - Chromium first (common locations)
+    process.env.LOCALAPPDATA + '\\Chromium\\Application\\chrome.exe',
+    'C:\\Program Files\\Chromium\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Chromium\\Application\\chrome.exe',
+    // Windows - Chrome fallback
+    process.env.LOCALAPPDATA + '\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
   ];
 
   for (const p of possiblePaths) {
     if (p && fs.existsSync(p)) {
+      console.log('Using browser:', p);
       return p;
     }
   }
 
   // Fallback to Playwright's bundled Chromium
-  return chromium.executablePath();
+  const playwrightChromium = chromium.executablePath();
+  console.log('Using Playwright bundled Chromium:', playwrightChromium);
+  return playwrightChromium;
 }
 
 /**

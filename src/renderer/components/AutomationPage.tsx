@@ -50,6 +50,56 @@ export function AutomationPage({ profiles }: AutomationPageProps) {
   });
   const [customQueries, setCustomQueries] = useState<string>('');
   const [showQueryEditor, setShowQueryEditor] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Handle drag-and-drop for .txt files
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragging) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    const txtFile = files.find(f => f.name.endsWith('.txt'));
+
+    if (txtFile) {
+      try {
+        const text = await txtFile.text();
+        const queries = text.split('\n').map(q => q.trim()).filter(q => q.length > 0);
+        setCustomQueries(queries.join('\n'));
+        setShowQueryEditor(true);
+      } catch (error) {
+        console.error('Failed to read file:', error);
+      }
+    }
+  };
+
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.name.endsWith('.txt')) {
+      try {
+        const text = await file.text();
+        const queries = text.split('\n').map(q => q.trim()).filter(q => q.length > 0);
+        setCustomQueries(queries.join('\n'));
+        setShowQueryEditor(true);
+      } catch (error) {
+        console.error('Failed to read file:', error);
+      }
+    }
+    // Reset input
+    e.target.value = '';
+  };
 
   // Listen for farming progress updates
   useEffect(() => {
@@ -230,6 +280,33 @@ export function AutomationPage({ profiles }: AutomationPageProps) {
 
             {showQueryEditor && (
               <div className="query-editor">
+                {/* Drop zone */}
+                <div
+                  className={`drop-zone ${isDragging ? 'dragging' : ''}`}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                >
+                  <div className="drop-zone-content">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="32" height="32">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                      <polyline points="17,8 12,3 7,8" />
+                      <line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                    <p>Drag & drop .txt file here</p>
+                    <span>or</span>
+                    <label className="btn btn-small btn-secondary file-btn">
+                      Browse file
+                      <input
+                        type="file"
+                        accept=".txt"
+                        onChange={handleFileInput}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
+                </div>
+
                 <textarea
                   value={customQueries}
                   onChange={e => setCustomQueries(e.target.value)}
@@ -237,11 +314,21 @@ export function AutomationPage({ profiles }: AutomationPageProps) {
                   rows={8}
                   disabled={progress.status === 'running'}
                 />
-                <p className="query-hint">
-                  {customQueries.trim()
-                    ? `${customQueries.split('\n').filter(q => q.trim()).length} custom queries`
-                    : 'Using 100+ default queries'}
-                </p>
+                <div className="query-footer">
+                  <p className="query-hint">
+                    {customQueries.trim()
+                      ? `${customQueries.split('\n').filter(q => q.trim()).length} custom queries`
+                      : 'Using 100+ default queries'}
+                  </p>
+                  {customQueries.trim() && (
+                    <button
+                      className="btn btn-small btn-secondary"
+                      onClick={() => setCustomQueries('')}
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
               </div>
             )}
           </div>

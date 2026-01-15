@@ -159,6 +159,60 @@
   margin-top: 8px;
 }
 
+/* Drop zone for txt files */
+.drop-zone {
+  border: 2px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 12px;
+  transition: all 0.2s ease;
+  background: var(--surface-primary);
+}
+
+.drop-zone:hover {
+  border-color: var(--accent-primary);
+  background: rgba(79, 172, 254, 0.05);
+}
+
+.drop-zone.dragging {
+  border-color: var(--accent-primary);
+  background: rgba(79, 172, 254, 0.1);
+  border-style: solid;
+}
+
+.drop-zone-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+}
+
+.drop-zone-content svg {
+  opacity: 0.5;
+}
+
+.drop-zone.dragging .drop-zone-content svg {
+  opacity: 1;
+  color: var(--accent-primary);
+}
+
+.drop-zone-content p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.drop-zone-content span {
+  font-size: 11px;
+}
+
+.file-btn {
+  cursor: pointer;
+  margin-top: 4px;
+}
+
 .query-editor textarea {
   width: 100%;
   padding: 10px;
@@ -177,10 +231,17 @@
   border-color: var(--accent-primary);
 }
 
+.query-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+
 .query-hint {
   font-size: 11px;
   color: var(--text-muted);
-  margin: 6px 0 0 0;
+  margin: 0;
 }
 
 /* Profiles Panel */
