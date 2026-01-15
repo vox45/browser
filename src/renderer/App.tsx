@@ -155,6 +155,8 @@ function App() {
     os: string;
     proxy: string;
     notes: string;
+    screenResolution?: { width: number; height: number };
+    fingerprint?: Partial<Profile['fingerprint']>;
   }) => {
     try {
       if (editingProfile) {
@@ -163,6 +165,7 @@ function App() {
           name: data.name,
           notes: data.notes,
           proxy: data.proxy || null,
+          fingerprint: data.fingerprint,
         });
 
         if ('error' in result) {
@@ -179,6 +182,7 @@ function App() {
           os: data.os as 'windows' | 'macos' | 'linux',
           proxy: data.proxy || undefined,
           notes: data.notes,
+          fingerprint: data.fingerprint,
         });
 
         if ('error' in result) {
@@ -325,6 +329,7 @@ function App() {
         <FingerprintTestModal
           profileId={testingProfile.id}
           profileName={testingProfile.name}
+          isRunning={testingProfile.isRunning}
           onClose={() => setTestingProfile(null)}
         />
       )}

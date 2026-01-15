@@ -109,6 +109,7 @@ ipcMain.handle('profile:create', async (_, data: {
   os?: 'windows' | 'macos' | 'linux';
   proxy?: ProxyConfig | string;
   notes?: string;
+  fingerprint?: Profile['fingerprint'];
 }) => {
   try {
     const fingerprintOptions: GenerateFingerprintOptions = {
@@ -124,12 +125,15 @@ ipcMain.handle('profile:create', async (_, data: {
       }
     }
 
+    // Use provided fingerprint or generate a new one
+    const fingerprint = data.fingerprint || generateFingerprint(fingerprintOptions);
+
     const profile: Profile = {
       id: uuidv4(),
       name: data.name,
       createdAt: new Date().toISOString(),
       lastUsed: null,
-      fingerprint: generateFingerprint(fingerprintOptions),
+      fingerprint,
       proxy,
       notes: data.notes || '',
     };

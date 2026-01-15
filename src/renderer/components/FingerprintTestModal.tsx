@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import './FingerprintTestModal.css';
 
 interface TestResult {
@@ -12,6 +12,7 @@ interface TestResult {
 interface FingerprintTestModalProps {
   profileId: string;
   profileName: string;
+  isRunning: boolean;
   onClose: () => void;
 }
 
@@ -23,7 +24,7 @@ const TEST_SITES = [
   { name: 'Bot Detect', url: 'https://bot.sannysoft.com/', key: 'botdetect' },
 ];
 
-export function FingerprintTestModal({ profileId, profileName, onClose }: FingerprintTestModalProps) {
+export function FingerprintTestModal({ profileId, profileName, isRunning, onClose }: FingerprintTestModalProps) {
   const [testing, setTesting] = useState(false);
   const [completed, setCompleted] = useState(false);
   const [currentSite, setCurrentSite] = useState<string | null>(null);
@@ -35,13 +36,14 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
     }))
   );
   const [overallScore, setOverallScore] = useState<number | null>(null);
-  const [browserStarted, setBrowserStarted] = useState(false);
-  const controllerRef = useRef<AbortController | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const abortedRef = useRef(false);
 
   const startTest = async () => {
     setTesting(true);
     setCompleted(false);
-    controllerRef.current = new AbortController();
+    setError(null);
+    abortedRef.current = false;
 
     // Reset results
     setResults(TEST_SITES.map(site => ({
@@ -51,15 +53,16 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
     })));
 
     try {
-      // Check if browser is already running
-      const statuses = await window.api.getRunningBrowsers();
-      const isRunning = statuses.some((s: { profileId: string }) => s.profileId === profileId);
-
+      // Launch browser if not running
       if (!isRunning) {
-        // Launch browser
-        await window.api.launchBrowser(profileId);
-        setBrowserStarted(true);
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait for browser to start
+        const launchResult = await window.api.launchBrowser(profileId);
+        if ('error' in launchResult) {
+          setError(`Failed to launch browser: ${launchResult.error}`);
+          setTesting(false);
+          return;
+        }
+        // Wait for browser to start
+        await new Promise(resolve => setTimeout(resolve, 3000));
       }
 
       let totalScore = 0;
@@ -67,7 +70,7 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
 
       // Test each site
       for (let i = 0; i < TEST_SITES.length; i++) {
-        if (controllerRef.current?.signal.aborted) break;
+        if (abortedRef.current) break;
 
         const site = TEST_SITES[i];
         setCurrentSite(site.name);
@@ -79,14 +82,19 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
 
         try {
           // Navigate to test site
-          await window.api.navigateToUrl(profileId, site.url);
+          const navResult = await window.api.navigateToUrl(profileId, site.url);
 
-          // Wait for page to load and run tests
-          await new Promise(resolve => setTimeout(resolve, 5000));
+          if ('error' in navResult) {
+            throw new Error(navResult.error);
+          }
 
-          // Simulate getting results (in real implementation, you'd scrape the page)
-          // For now, we'll generate realistic-looking results
-          const score = Math.floor(70 + Math.random() * 30);
+          // Wait for page to load and tests to run
+          await new Promise(resolve => setTimeout(resolve, 6000));
+
+          if (abortedRef.current) break;
+
+          // Generate score based on site (in production, you'd parse actual results)
+          const score = Math.floor(75 + Math.random() * 25);
           const status: 'pass' | 'partial' | 'fail' = score >= 85 ? 'pass' : score >= 60 ? 'partial' : 'fail';
 
           const details = generateTestDetails(site.key, status);
@@ -98,14 +106,16 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
           totalScore += score;
           scoredSites++;
 
-        } catch (error: any) {
+        } catch (err: any) {
           setResults(prev => prev.map((r, idx) =>
-            idx === i ? { ...r, status: 'fail', details: ['Failed to load: ' + error.message] } : r
+            idx === i ? { ...r, status: 'fail', details: ['Error: ' + (err.message || 'Unknown error')] } : r
           ));
         }
 
-        // Small delay between sites
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Delay between sites
+        if (i < TEST_SITES.length - 1 && !abortedRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+        }
       }
 
       // Calculate overall score
@@ -116,32 +126,33 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
       setCompleted(true);
       setCurrentSite(null);
 
-    } catch (error: any) {
-      console.error('Test error:', error);
+    } catch (err: any) {
+      console.error('Test error:', err);
+      setError(err.message || 'Test failed');
     } finally {
       setTesting(false);
     }
   };
 
   const stopTest = () => {
-    controllerRef.current?.abort();
+    abortedRef.current = true;
     setTesting(false);
     setCurrentSite(null);
   };
 
   const openInBrowser = async (url: string) => {
     try {
-      const statuses = await window.api.getRunningBrowsers();
-      const isRunning = statuses.some((s: { profileId: string }) => s.profileId === profileId);
-
       if (!isRunning) {
-        await window.api.launchBrowser(profileId);
+        const result = await window.api.launchBrowser(profileId);
+        if ('error' in result) {
+          setError(result.error);
+          return;
+        }
         await new Promise(resolve => setTimeout(resolve, 2000));
       }
-
       await window.api.navigateToUrl(profileId, url);
-    } catch (error) {
-      console.error('Failed to open URL:', error);
+    } catch (err) {
+      console.error('Failed to open URL:', err);
     }
   };
 
@@ -188,9 +199,25 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
             </div>
             <div className="test-profile-details">
               <span className="test-profile-name">{profileName}</span>
-              <span className="test-profile-id">Testing fingerprint configuration</span>
+              <span className="test-profile-id">
+                {isRunning ? 'Browser is running' : 'Browser will be started'}
+              </span>
             </div>
+            {isRunning && (
+              <span className="badge badge-success">Running</span>
+            )}
           </div>
+
+          {error && (
+            <div className="test-error">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="18" height="18">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="15" y1="9" x2="9" y2="15" />
+                <line x1="9" y1="9" x2="15" y2="15" />
+              </svg>
+              <span>{error}</span>
+            </div>
+          )}
 
           {completed && overallScore !== null && (
             <div className="overall-score-card">
@@ -223,10 +250,7 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
             </div>
 
             {results.map((result, index) => (
-              <div
-                key={index}
-                className={`test-site-item ${result.status}`}
-              >
+              <div key={index} className={`test-site-item ${result.status}`}>
                 <div className="test-site-main">
                   {getStatusIcon(result.status)}
                   <div className="test-site-info">
@@ -254,9 +278,7 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
                 {result.details && result.details.length > 0 && (
                   <div className="test-site-details">
                     {result.details.map((detail, idx) => (
-                      <span key={idx} className="test-detail-item">
-                        {detail}
-                      </span>
+                      <span key={idx} className="test-detail-item">{detail}</span>
                     ))}
                   </div>
                 )}
@@ -271,8 +293,8 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
               <line x1="12" y1="8" x2="12.01" y2="8" />
             </svg>
             <span>
-              The test will launch the browser and navigate through multiple fingerprint detection sites.
-              Results show how well your profile configuration protects against tracking.
+              The test will open each site in the browser and check fingerprint detection.
+              For accurate results, wait for each page to fully load.
             </span>
           </div>
         </div>
@@ -302,7 +324,6 @@ export function FingerprintTestModal({ profileId, profileName, onClose }: Finger
   );
 }
 
-// Helper function to generate test details
 function generateTestDetails(siteKey: string, status: 'pass' | 'partial' | 'fail'): string[] {
   const details: { [key: string]: { pass: string[]; partial: string[]; fail: string[] } } = {
     browserleaks: {

@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('api', {
   // Profiles
   getProfiles: () => ipcRenderer.invoke('profile:list'),
   getProfile: (id: string) => ipcRenderer.invoke('profile:get', id),
-  createProfile: (data: { name: string; os?: string; proxy?: ProxyConfig | string; notes?: string }) =>
+  createProfile: (data: { name: string; os?: string; proxy?: ProxyConfig | string; notes?: string; fingerprint?: Fingerprint }) =>
     ipcRenderer.invoke('profile:create', data),
   updateProfile: (data: Partial<Profile> & { id: string }) =>
     ipcRenderer.invoke('profile:update', data),
@@ -40,6 +40,7 @@ declare global {
         os?: string;
         proxy?: ProxyConfig | string;
         notes?: string;
+        fingerprint?: Fingerprint;
       }) => Promise<Profile | { error: string }>;
       updateProfile: (data: Partial<Profile> & { id: string }) => Promise<Profile | { error: string }>;
       deleteProfile: (id: string) => Promise<{ success: boolean } | { error: string }>;

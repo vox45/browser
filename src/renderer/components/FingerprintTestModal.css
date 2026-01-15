@@ -43,6 +43,24 @@
   color: var(--text-muted);
 }
 
+/* Error message */
+.test-error {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--error-soft);
+  border: 1px solid rgba(255, 107, 107, 0.3);
+  border-radius: var(--radius-md);
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: var(--error);
+}
+
+.test-error svg {
+  flex-shrink: 0;
+}
+
 /* Overall Score Card */
 .overall-score-card {
   display: flex;
