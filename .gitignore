@@ -34,3 +34,6 @@ npm-debug.log*
 # Cache
 .cache/
 .parcel-cache/
+
+# Extracted archives (temporary)
+proga-main-extracted/
