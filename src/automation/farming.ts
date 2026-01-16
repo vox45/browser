@@ -243,16 +243,20 @@ export async function runDailySet(
             }
           }
 
-          // Go back to rewards page if navigated away
-          if (!page.url().includes('rewards.bing.com')) {
-            await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
-            await sleep(randomDelay(2000, 3000));
-          }
+          // ALWAYS go back to main rewards page for next item
+          onProgress?.(`Going back to rewards page...`);
+          await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
+          await sleep(randomDelay(2000, 3000));
         } else {
           onProgress?.(`Daily set item ${i + 1} not found`);
         }
       } catch (err: any) {
         onProgress?.(`Daily set item ${i + 1} error: ${err.message}`);
+        // Try to go back to rewards page anyway
+        try {
+          await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
+          await sleep(randomDelay(2000, 3000));
+        } catch {}
       }
     }
 
