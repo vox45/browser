@@ -269,13 +269,13 @@ ipcMain.handle('browser:navigate', async (_, id: string, url: string) => {
 });
 
 // ==================== Farming Automation ====================
-import { farmBingRewards, FarmingConfig, FarmingProgress } from '../automation/farming';
+import { FarmingConfig, runDailySet, runDesktopSearches, runMobileSearches } from '../automation/farming';
 import { getBrowserContext } from '../core/browser';
 
 let farmingAbortController: AbortController | null = null;
 let isFarmingRunning = false;
 
-// Start farming for selected profiles
+// Start farming for selected profiles (each phase in separate browser session)
 ipcMain.handle('farming:start', async (event, data: {
   profileIds: string[];
   config: {
@@ -300,8 +300,8 @@ ipcMain.handle('farming:start', async (event, data: {
 
   const farmingConfig: FarmingConfig = {
     ...config,
-    delayBetweenSearches: { min: 4000, max: 8000 },
-    typingDelay: { min: 50, max: 150 },
+    delayBetweenSearches: { min: 4000, max: 6000 },
+    typingDelay: { min: 80, max: 120 },
   };
 
   // Send initial progress
@@ -309,7 +309,7 @@ ipcMain.handle('farming:start', async (event, data: {
     status: 'running',
     totalProfiles: profileIds.length,
     completedProfiles: 0,
-    log: [`Starting farming for ${profileIds.length} profiles...`],
+    log: [`Starting farming for ${profileIds.length} profile(s)...`],
   });
 
   try {
@@ -333,74 +333,159 @@ ipcMain.handle('farming:start', async (event, data: {
         completedDesktop: 0,
         completedMobile: 0,
         dailySetCompleted: false,
-        log: [`Starting farming for profile: ${profile.name}`],
+        log: [`\n=== Profile ${i + 1}/${profileIds.length}: ${profile.name} ===`],
       });
 
-      // Launch browser for this profile
-      try {
-        await launchBrowser(profile);
+      let dailySetCompleted = false;
+      let desktopSearches = 0;
+      let mobileSearches = 0;
 
-        // Wait for browser to be ready
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        const context = getBrowserContext(profileId);
-        if (!context) {
-          mainWindow?.webContents.send('farming:progress', {
-            log: [`Failed to get browser context for ${profile.name}`],
-          });
-          continue;
-        }
-
-        // Run farming
-        const result = await farmBingRewards(
-          context,
-          farmingConfig,
-          customQueries,
-          (progress) => {
-            mainWindow?.webContents.send('farming:progress', progress);
-          }
-        );
-
-        // Update result with profile info
-        result.profileId = profileId;
-        result.profileName = profile.name;
-
+      // Phase 1: Daily Set (separate browser session)
+      if (config.dailySet) {
         mainWindow?.webContents.send('farming:progress', {
-          completedProfiles: i + 1,
-          log: [
-            `Completed ${profile.name}: ${result.desktopSearches} desktop, ${result.mobileSearches} mobile searches`,
-            result.dailySetCompleted ? 'Daily set completed' : 'Daily set not completed',
-          ],
+          currentPhase: 'daily',
+          log: ['[Phase 1] Daily Set - Opening browser...'],
         });
 
-        // Close browser after farming
-        await stopBrowser(profileId);
-
-        // Wait between profiles
-        if (i < profileIds.length - 1) {
-          mainWindow?.webContents.send('farming:progress', {
-            log: ['Waiting before next profile...'],
-          });
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-
-      } catch (error: any) {
-        mainWindow?.webContents.send('farming:progress', {
-          log: [`Error farming ${profile.name}: ${error.message}`],
-        });
-        // Try to stop browser on error
         try {
+          await launchBrowser(profile);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          const context = getBrowserContext(profileId);
+          if (context) {
+            dailySetCompleted = await runDailySet(context, msg => {
+              mainWindow?.webContents.send('farming:progress', { log: [msg] });
+            });
+          }
+
+          mainWindow?.webContents.send('farming:progress', {
+            dailySetCompleted,
+            log: ['Closing browser...'],
+          });
           await stopBrowser(profileId);
-        } catch {
-          // Ignore
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error: any) {
+          mainWindow?.webContents.send('farming:progress', {
+            log: [`Daily Set error: ${error.message}`],
+          });
+          try { await stopBrowser(profileId); } catch {}
         }
+      }
+
+      if (farmingAbortController?.signal.aborted) break;
+
+      // Phase 2: Desktop searches (separate browser session)
+      if (config.desktopSearches > 0) {
+        mainWindow?.webContents.send('farming:progress', {
+          currentPhase: 'desktop',
+          log: [`[Phase 2] Desktop searches (${config.desktopSearches}) - Opening browser...`],
+        });
+
+        try {
+          await launchBrowser(profile);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          const context = getBrowserContext(profileId);
+          if (context) {
+            desktopSearches = await runDesktopSearches(
+              context,
+              config.desktopSearches,
+              farmingConfig,
+              customQueries,
+              msg => {
+                mainWindow?.webContents.send('farming:progress', { log: [msg] });
+              },
+              (completed, total) => {
+                mainWindow?.webContents.send('farming:progress', {
+                  completedDesktop: completed,
+                });
+              }
+            );
+          }
+
+          mainWindow?.webContents.send('farming:progress', {
+            log: ['Closing browser...'],
+          });
+          await stopBrowser(profileId);
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        } catch (error: any) {
+          mainWindow?.webContents.send('farming:progress', {
+            log: [`Desktop search error: ${error.message}`],
+          });
+          try { await stopBrowser(profileId); } catch {}
+        }
+      }
+
+      if (farmingAbortController?.signal.aborted) break;
+
+      // Phase 3: Mobile searches (separate browser session)
+      if (config.mobileSearches > 0) {
+        mainWindow?.webContents.send('farming:progress', {
+          currentPhase: 'mobile',
+          log: [`[Phase 3] Mobile searches (${config.mobileSearches}) - Opening browser...`],
+        });
+
+        try {
+          await launchBrowser(profile);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+
+          const context = getBrowserContext(profileId);
+          if (context) {
+            mobileSearches = await runMobileSearches(
+              context,
+              config.mobileSearches,
+              farmingConfig,
+              customQueries,
+              msg => {
+                mainWindow?.webContents.send('farming:progress', { log: [msg] });
+              },
+              (completed, total) => {
+                mainWindow?.webContents.send('farming:progress', {
+                  completedMobile: completed,
+                });
+              }
+            );
+          }
+
+          mainWindow?.webContents.send('farming:progress', {
+            log: ['Closing browser...'],
+          });
+          await stopBrowser(profileId);
+        } catch (error: any) {
+          mainWindow?.webContents.send('farming:progress', {
+            log: [`Mobile search error: ${error.message}`],
+          });
+          try { await stopBrowser(profileId); } catch {}
+        }
+      }
+
+      // Profile completed
+      mainWindow?.webContents.send('farming:progress', {
+        completedProfiles: i + 1,
+        log: [
+          `\nProfile "${profile.name}" done:`,
+          `  Daily Set: ${dailySetCompleted ? 'Yes' : 'No'}`,
+          `  Desktop: ${desktopSearches}/${config.desktopSearches}`,
+          `  Mobile: ${mobileSearches}/${config.mobileSearches}`,
+        ],
+      });
+
+      // Wait between profiles
+      if (i < profileIds.length - 1) {
+        mainWindow?.webContents.send('farming:progress', {
+          log: ['Waiting 5s before next profile...'],
+        });
+        await new Promise(resolve => setTimeout(resolve, 5000));
       }
     }
 
     mainWindow?.webContents.send('farming:progress', {
       status: 'completed',
       currentProfile: null,
-      log: ['Farming session completed!'],
+      currentPhase: null,
+      log: ['\n=== Farming session completed! ==='],
     });
 
     return { success: true };

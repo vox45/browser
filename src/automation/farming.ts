@@ -19,7 +19,7 @@ const ANDROID_DEVICES = [
 const ANDROID_VERSIONS = ['12', '13', '14'];
 
 // Generate mobile user agent
-function generateMobileUserAgent(): {
+export function generateMobileUserAgent(): {
   userAgent: string;
   device: typeof ANDROID_DEVICES[0];
   viewport: { width: number; height: number };
@@ -74,8 +74,8 @@ export interface FarmingConfig {
   desktopSearches: number;
   mobileSearches: number;
   dailySet: boolean;
-  delayBetweenSearches: { min: number; max: number }; // in ms
-  typingDelay: { min: number; max: number }; // in ms per character
+  delayBetweenSearches: { min: number; max: number };
+  typingDelay: { min: number; max: number };
 }
 
 export interface FarmingProgress {
@@ -88,6 +88,7 @@ export interface FarmingProgress {
   totalProfiles: number;
   completedProfiles: number;
   error: string | null;
+  log?: string[];
 }
 
 export interface FarmingResult {
@@ -154,12 +155,11 @@ async function performBingSearch(
 
     // Navigate to Bing
     await page.goto('https://www.bing.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await sleep(randomDelay(1000, 2000));
+    await sleep(randomDelay(1500, 2500));
 
     // Find search input
     const searchInput = await page.$('#sb_form_q');
     if (!searchInput) {
-      // Try alternative selector
       const altInput = await page.$('input[name="q"]');
       if (!altInput) {
         onProgress?.('Search input not found, trying direct URL');
@@ -191,13 +191,18 @@ const DAILY_SET_XPATHS = [
   '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[3]/div/card-content/mee-rewards-daily-set-item-content/div/a',
 ];
 
-// Perform daily set collection (all 3 items)
-async function performDailySet(
-  page: Page,
+/**
+ * Phase 1: Daily Set collection (runs in separate browser session)
+ */
+export async function runDailySet(
+  context: BrowserContext,
   onProgress?: (msg: string) => void
 ): Promise<boolean> {
+  let page: Page | null = null;
+
   try {
-    onProgress?.('Starting Daily Set collection...');
+    onProgress?.('Opening browser for Daily Set...');
+    page = await context.newPage();
 
     // Navigate to rewards page
     await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 45000 });
@@ -221,23 +226,18 @@ async function performDailySet(
       onProgress?.(`Clicking daily set item ${i + 1}/3...`);
 
       try {
-        // Wait for element to appear
         const element = await page.waitForSelector(`xpath=${xpath}`, { timeout: 10000 }).catch(() => null);
 
         if (element) {
-          // Click using JavaScript (more reliable)
           await page.evaluate((el) => (el as HTMLElement).click(), element);
           completedCount++;
 
-          // Wait for action to complete
           await sleep(randomDelay(3000, 4000));
 
           // Handle new tabs if opened
           const pages = page.context().pages();
           if (pages.length > 1) {
-            // Wait a bit for the new tab to load
             await sleep(randomDelay(2000, 3000));
-            // Close extra tabs
             for (let j = pages.length - 1; j > 0; j--) {
               await pages[j].close().catch(() => {});
             }
@@ -261,125 +261,97 @@ async function performDailySet(
   } catch (error: any) {
     onProgress?.(`Daily Set error: ${error.message}`);
     return false;
+  } finally {
+    if (page) {
+      await page.close().catch(() => {});
+    }
   }
 }
 
-// Main farming function for a single context
-export async function farmBingRewards(
+/**
+ * Phase 2: Desktop searches (runs in separate browser session)
+ */
+export async function runDesktopSearches(
   context: BrowserContext,
+  count: number,
   config: FarmingConfig,
   customQueries?: string[],
-  onProgress?: (progress: Partial<FarmingProgress>) => void
-): Promise<FarmingResult> {
-  const result: FarmingResult = {
-    profileId: '',
-    profileName: '',
-    desktopSearches: 0,
-    mobileSearches: 0,
-    dailySetCompleted: false,
-    error: null,
-  };
-
+  onProgress?: (msg: string) => void,
+  onSearchComplete?: (completed: number, total: number) => void
+): Promise<number> {
   let page: Page | null = null;
+  let completedSearches = 0;
 
   try {
+    onProgress?.(`Opening browser for ${count} desktop searches...`);
     page = await context.newPage();
 
-    // Phase 1: Daily Set (if enabled)
-    if (config.dailySet) {
-      onProgress?.({ currentPhase: 'daily', dailySetCompleted: false });
-      result.dailySetCompleted = await performDailySet(page, msg => {
-        // Forward daily set progress messages to the log
-        onProgress?.({
-          log: [msg]
-        } as any);
-      });
-      onProgress?.({ dailySetCompleted: result.dailySetCompleted });
-    }
+    const queries = getRandomQueries(count, customQueries);
 
-    // Phase 2: Desktop searches (30 by default)
-    if (config.desktopSearches > 0) {
-      onProgress?.({
-        currentPhase: 'desktop',
-        completedDesktop: 0,
-        log: [`Starting ${config.desktopSearches} desktop searches...`]
-      } as any);
-
-      const queries = getRandomQueries(config.desktopSearches, customQueries);
-
-      for (let i = 0; i < queries.length; i++) {
-        const success = await performBingSearch(page, queries[i], config, msg => {
-          onProgress?.({ log: [msg] } as any);
-        });
-        if (success) {
-          result.desktopSearches++;
-          onProgress?.({
-            completedDesktop: result.desktopSearches,
-            log: [`Desktop search ${result.desktopSearches}/${config.desktopSearches}`]
-          } as any);
-        }
+    for (let i = 0; i < queries.length; i++) {
+      const success = await performBingSearch(page, queries[i], config, onProgress);
+      if (success) {
+        completedSearches++;
+        onSearchComplete?.(completedSearches, count);
       }
-
-      onProgress?.({ log: [`Completed ${result.desktopSearches} desktop searches`] } as any);
     }
 
-    // Phase 3: Mobile searches (20 by default, requires mobile emulation)
-    if (config.mobileSearches > 0) {
-      onProgress?.({
-        currentPhase: 'mobile',
-        completedMobile: 0,
-        log: [`Starting ${config.mobileSearches} mobile searches...`]
-      } as any);
-
-      // Close desktop page
-      await page.close();
-
-      // Create mobile context
-      const mobileUA = generateMobileUserAgent();
-      onProgress?.({ log: [`Using mobile device: ${mobileUA.device.model}`] } as any);
-
-      // Create new page with mobile viewport
-      page = await context.newPage();
-      await page.setViewportSize(mobileUA.viewport);
-
-      // Override user agent for mobile
-      await page.setExtraHTTPHeaders({
-        'User-Agent': mobileUA.userAgent,
-      });
-
-      const queries = getRandomQueries(config.mobileSearches, customQueries);
-
-      for (let i = 0; i < queries.length; i++) {
-        const success = await performBingSearch(page, queries[i], config, msg => {
-          onProgress?.({ log: [msg] } as any);
-        });
-        if (success) {
-          result.mobileSearches++;
-          onProgress?.({
-            completedMobile: result.mobileSearches,
-            log: [`Mobile search ${result.mobileSearches}/${config.mobileSearches}`]
-          } as any);
-        }
-      }
-
-      onProgress?.({ log: [`Completed ${result.mobileSearches} mobile searches`] } as any);
-    }
-
-    onProgress?.({ status: 'completed' });
+    onProgress?.(`Desktop searches completed: ${completedSearches}/${count}`);
+    return completedSearches;
   } catch (error: any) {
-    result.error = error.message;
-    onProgress?.({ status: 'error', error: error.message });
+    onProgress?.(`Desktop search error: ${error.message}`);
+    return completedSearches;
   } finally {
     if (page) {
-      try {
-        await page.close();
-      } catch {
-        // Ignore close errors
-      }
+      await page.close().catch(() => {});
     }
   }
+}
 
-  return result;
+/**
+ * Phase 3: Mobile searches (runs in separate browser session with mobile emulation)
+ */
+export async function runMobileSearches(
+  context: BrowserContext,
+  count: number,
+  config: FarmingConfig,
+  customQueries?: string[],
+  onProgress?: (msg: string) => void,
+  onSearchComplete?: (completed: number, total: number) => void
+): Promise<number> {
+  let page: Page | null = null;
+  let completedSearches = 0;
+
+  try {
+    const mobileUA = generateMobileUserAgent();
+    onProgress?.(`Opening browser for ${count} mobile searches (${mobileUA.device.model})...`);
+
+    page = await context.newPage();
+    await page.setViewportSize(mobileUA.viewport);
+    await page.setExtraHTTPHeaders({
+      'User-Agent': mobileUA.userAgent,
+    });
+
+    const queries = getRandomQueries(count, customQueries);
+
+    for (let i = 0; i < queries.length; i++) {
+      const success = await performBingSearch(page, queries[i], config, onProgress);
+      if (success) {
+        completedSearches++;
+        onSearchComplete?.(completedSearches, count);
+      }
+    }
+
+    onProgress?.(`Mobile searches completed: ${completedSearches}/${count}`);
+    return completedSearches;
+  } catch (error: any) {
+    onProgress?.(`Mobile search error: ${error.message}`);
+    return completedSearches;
+  } finally {
+    if (page) {
+      await page.close().catch(() => {});
+    }
+  }
 }
 
 // Export default queries for UI
