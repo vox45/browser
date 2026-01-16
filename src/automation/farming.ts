@@ -184,24 +184,14 @@ async function performBingSearch(
   }
 }
 
-// Selectors for daily set items on rewards.bing.com (updated for current site structure)
-const DAILY_SET_SELECTORS = [
-  // Primary selectors for daily set cards
-  'mee-rewards-daily-set-section mee-card-group mee-card',
-  'mee-rewards-daily-set-item-content',
-  '.daily-sets a.ds-card-sec',
-  '.c-card-content a',
-  // More cards section
-  'mee-rewards-more-activities-card-item a',
-  '.more-activities a.c-card-sec',
-  // Punch cards
-  'mee-rewards-punch-card a',
-  // Generic clickable cards with points
-  '[data-bi-id*="DailySet"]',
-  '[data-bi-id*="MoreActivities"]',
+// XPaths for daily set items (from original program - 3 items)
+const DAILY_SET_XPATHS = [
+  '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[1]/div/card-content/mee-rewards-daily-set-item-content/div/a',
+  '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[2]/div/card-content/mee-rewards-daily-set-item-content/div/a',
+  '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[3]/div/card-content/mee-rewards-daily-set-item-content/div/a',
 ];
 
-// Perform daily set collection
+// Perform daily set collection (all 3 items)
 async function performDailySet(
   page: Page,
   onProgress?: (msg: string) => void
@@ -213,8 +203,8 @@ async function performDailySet(
     await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 45000 });
     await sleep(randomDelay(3000, 5000));
 
-    // Check if logged in by looking for sign-in prompts
-    const signInButton = await page.$('a[href*="login"], a[href*="signin"], .sign-in-link, #id_l');
+    // Check if logged in
+    const signInButton = await page.$('a[href*="login"], a[href*="signin"], .sign-in-link');
     if (signInButton) {
       const isVisible = await signInButton.isVisible().catch(() => false);
       if (isVisible) {
@@ -223,108 +213,51 @@ async function performDailySet(
       }
     }
 
-    // Wait for page to fully load
-    await sleep(randomDelay(2000, 3000));
+    let completedCount = 0;
 
-    let clickedCount = 0;
-    const maxAttempts = 10; // Limit number of items to click
-    const clickedUrls = new Set<string>();
+    // Click each daily set item using XPath (all 3)
+    for (let i = 0; i < DAILY_SET_XPATHS.length; i++) {
+      const xpath = DAILY_SET_XPATHS[i];
+      onProgress?.(`Clicking daily set item ${i + 1}/3...`);
 
-    // Try to find and click daily set items
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      let foundNewItem = false;
+      try {
+        // Wait for element to appear
+        const element = await page.waitForSelector(`xpath=${xpath}`, { timeout: 10000 }).catch(() => null);
 
-      for (const selector of DAILY_SET_SELECTORS) {
-        try {
-          const elements = await page.$$(selector);
+        if (element) {
+          // Click using JavaScript (more reliable)
+          await page.evaluate((el) => (el as HTMLElement).click(), element);
+          completedCount++;
 
-          for (const element of elements) {
-            try {
-              const isVisible = await element.isVisible().catch(() => false);
-              if (!isVisible) continue;
+          // Wait for action to complete
+          await sleep(randomDelay(3000, 4000));
 
-              // Get href to track what we've clicked
-              const href = await element.getAttribute('href').catch(() => null);
-              if (href && clickedUrls.has(href)) continue;
-
-              // Check if it looks like an uncompleted item (has checkmark or is greyed out)
-              const classList = await element.getAttribute('class').catch(() => '');
-              if (classList?.includes('completed') || classList?.includes('disabled')) continue;
-
-              // Try to click
-              onProgress?.(`Clicking daily set item ${clickedCount + 1}...`);
-
-              // Store current URL before click
-              const currentUrl = page.url();
-
-              await element.click({ timeout: 5000 }).catch(async () => {
-                // Try JavaScript click if regular click fails
-                await page.evaluate((el) => (el as HTMLElement).click(), element);
-              });
-
-              if (href) clickedUrls.add(href);
-              clickedCount++;
-              foundNewItem = true;
-
-              // Wait for potential navigation or popup
-              await sleep(randomDelay(3000, 5000));
-
-              // Handle new tab/window if opened
-              const pages = page.context().pages();
-              if (pages.length > 1) {
-                // Close extra tabs and focus back on main
-                for (let i = 1; i < pages.length; i++) {
-                  await pages[i].close().catch(() => {});
-                }
-              }
-
-              // Check if we navigated away
-              if (page.url() !== currentUrl && !page.url().includes('rewards.bing.com')) {
-                // We navigated to a task page, wait and go back
-                await sleep(randomDelay(2000, 4000));
-                await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
-                await sleep(randomDelay(2000, 3000));
-              }
-
-              break; // Move to next attempt after successful click
-            } catch {
-              continue;
+          // Handle new tabs if opened
+          const pages = page.context().pages();
+          if (pages.length > 1) {
+            // Wait a bit for the new tab to load
+            await sleep(randomDelay(2000, 3000));
+            // Close extra tabs
+            for (let j = pages.length - 1; j > 0; j--) {
+              await pages[j].close().catch(() => {});
             }
           }
 
-          if (foundNewItem) break;
-        } catch {
-          continue;
+          // Go back to rewards page if navigated away
+          if (!page.url().includes('rewards.bing.com')) {
+            await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
+            await sleep(randomDelay(2000, 3000));
+          }
+        } else {
+          onProgress?.(`Daily set item ${i + 1} not found`);
         }
+      } catch (err: any) {
+        onProgress?.(`Daily set item ${i + 1} error: ${err.message}`);
       }
-
-      if (!foundNewItem) {
-        // No more items to click
-        break;
-      }
-
-      // Brief pause between items
-      await sleep(randomDelay(1000, 2000));
     }
 
-    // Also try to click the "Earn more points" or streak bonus if available
-    try {
-      const streakBonus = await page.$('mee-rewards-streak-hero button, .streak-bonus button, [data-bi-id*="streak"]');
-      if (streakBonus) {
-        const isVisible = await streakBonus.isVisible().catch(() => false);
-        if (isVisible) {
-          await streakBonus.click().catch(() => {});
-          clickedCount++;
-          onProgress?.('Clicked streak bonus');
-          await sleep(randomDelay(2000, 3000));
-        }
-      }
-    } catch {
-      // Streak bonus not available or already claimed
-    }
-
-    onProgress?.(`Daily Set: completed ${clickedCount} items`);
-    return clickedCount > 0;
+    onProgress?.(`Daily Set completed: ${completedCount}/3 items`);
+    return completedCount > 0;
   } catch (error: any) {
     onProgress?.(`Daily Set error: ${error.message}`);
     return false;
@@ -364,29 +297,46 @@ export async function farmBingRewards(
       onProgress?.({ dailySetCompleted: result.dailySetCompleted });
     }
 
-    // Phase 2: Desktop searches
+    // Phase 2: Desktop searches (30 by default)
     if (config.desktopSearches > 0) {
-      onProgress?.({ currentPhase: 'desktop', completedDesktop: 0 });
+      onProgress?.({
+        currentPhase: 'desktop',
+        completedDesktop: 0,
+        log: [`Starting ${config.desktopSearches} desktop searches...`]
+      } as any);
+
       const queries = getRandomQueries(config.desktopSearches, customQueries);
 
       for (let i = 0; i < queries.length; i++) {
-        const success = await performBingSearch(page, queries[i], config);
+        const success = await performBingSearch(page, queries[i], config, msg => {
+          onProgress?.({ log: [msg] } as any);
+        });
         if (success) {
           result.desktopSearches++;
-          onProgress?.({ completedDesktop: result.desktopSearches });
+          onProgress?.({
+            completedDesktop: result.desktopSearches,
+            log: [`Desktop search ${result.desktopSearches}/${config.desktopSearches}`]
+          } as any);
         }
       }
+
+      onProgress?.({ log: [`Completed ${result.desktopSearches} desktop searches`] } as any);
     }
 
-    // Phase 3: Mobile searches (requires mobile emulation)
+    // Phase 3: Mobile searches (20 by default, requires mobile emulation)
     if (config.mobileSearches > 0) {
-      onProgress?.({ currentPhase: 'mobile', completedMobile: 0 });
+      onProgress?.({
+        currentPhase: 'mobile',
+        completedMobile: 0,
+        log: [`Starting ${config.mobileSearches} mobile searches...`]
+      } as any);
 
       // Close desktop page
       await page.close();
 
       // Create mobile context
       const mobileUA = generateMobileUserAgent();
+      onProgress?.({ log: [`Using mobile device: ${mobileUA.device.model}`] } as any);
 
       // Create new page with mobile viewport
       page = await context.newPage();
@@ -400,12 +350,19 @@ export async function farmBingRewards(
       const queries = getRandomQueries(config.mobileSearches, customQueries);
 
       for (let i = 0; i < queries.length; i++) {
-        const success = await performBingSearch(page, queries[i], config);
+        const success = await performBingSearch(page, queries[i], config, msg => {
+          onProgress?.({ log: [msg] } as any);
+        });
         if (success) {
           result.mobileSearches++;
-          onProgress?.({ completedMobile: result.mobileSearches });
+          onProgress?.({
+            completedMobile: result.mobileSearches,
+            log: [`Mobile search ${result.mobileSearches}/${config.mobileSearches}`]
+          } as any);
         }
       }
+
+      onProgress?.({ log: [`Completed ${result.mobileSearches} mobile searches`] } as any);
     }
 
     onProgress?.({ status: 'completed' });
