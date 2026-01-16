@@ -184,11 +184,21 @@ async function performBingSearch(
   }
 }
 
-// XPaths for daily set items on rewards.bing.com
+// Selectors for daily set items on rewards.bing.com (updated for current site structure)
 const DAILY_SET_SELECTORS = [
-  'mee-rewards-daily-set-item-content a',
-  '.daily-sets mee-card a',
-  '[data-bi-id*="daily"]',
+  // Primary selectors for daily set cards
+  'mee-rewards-daily-set-section mee-card-group mee-card',
+  'mee-rewards-daily-set-item-content',
+  '.daily-sets a.ds-card-sec',
+  '.c-card-content a',
+  // More cards section
+  'mee-rewards-more-activities-card-item a',
+  '.more-activities a.c-card-sec',
+  // Punch cards
+  'mee-rewards-punch-card a',
+  // Generic clickable cards with points
+  '[data-bi-id*="DailySet"]',
+  '[data-bi-id*="MoreActivities"]',
 ];
 
 // Perform daily set collection
@@ -199,45 +209,121 @@ async function performDailySet(
   try {
     onProgress?.('Starting Daily Set collection...');
 
-    await page.goto('https://rewards.bing.com/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // Navigate to rewards page
+    await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 45000 });
     await sleep(randomDelay(3000, 5000));
 
-    // Check if logged in
-    const signInButton = await page.$('a[href*="login"]');
+    // Check if logged in by looking for sign-in prompts
+    const signInButton = await page.$('a[href*="login"], a[href*="signin"], .sign-in-link, #id_l');
     if (signInButton) {
-      onProgress?.('Not logged in to Microsoft Rewards');
-      return false;
-    }
-
-    // Find daily set items
-    let clickedCount = 0;
-
-    for (const selector of DAILY_SET_SELECTORS) {
-      try {
-        const elements = await page.$$(selector);
-        for (const element of elements) {
-          try {
-            const isVisible = await element.isVisible();
-            if (isVisible) {
-              await element.click();
-              clickedCount++;
-              await sleep(randomDelay(2000, 4000));
-
-              // Go back to rewards page
-              await page.goto('https://rewards.bing.com/', { waitUntil: 'domcontentloaded' });
-              await sleep(randomDelay(1000, 2000));
-            }
-          } catch {
-            // Element might have been removed or is not clickable
-            continue;
-          }
-        }
-      } catch {
-        continue;
+      const isVisible = await signInButton.isVisible().catch(() => false);
+      if (isVisible) {
+        onProgress?.('Not logged in to Microsoft Rewards');
+        return false;
       }
     }
 
-    onProgress?.(`Daily Set: clicked ${clickedCount} items`);
+    // Wait for page to fully load
+    await sleep(randomDelay(2000, 3000));
+
+    let clickedCount = 0;
+    const maxAttempts = 10; // Limit number of items to click
+    const clickedUrls = new Set<string>();
+
+    // Try to find and click daily set items
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      let foundNewItem = false;
+
+      for (const selector of DAILY_SET_SELECTORS) {
+        try {
+          const elements = await page.$$(selector);
+
+          for (const element of elements) {
+            try {
+              const isVisible = await element.isVisible().catch(() => false);
+              if (!isVisible) continue;
+
+              // Get href to track what we've clicked
+              const href = await element.getAttribute('href').catch(() => null);
+              if (href && clickedUrls.has(href)) continue;
+
+              // Check if it looks like an uncompleted item (has checkmark or is greyed out)
+              const classList = await element.getAttribute('class').catch(() => '');
+              if (classList?.includes('completed') || classList?.includes('disabled')) continue;
+
+              // Try to click
+              onProgress?.(`Clicking daily set item ${clickedCount + 1}...`);
+
+              // Store current URL before click
+              const currentUrl = page.url();
+
+              await element.click({ timeout: 5000 }).catch(async () => {
+                // Try JavaScript click if regular click fails
+                await page.evaluate((el) => (el as HTMLElement).click(), element);
+              });
+
+              if (href) clickedUrls.add(href);
+              clickedCount++;
+              foundNewItem = true;
+
+              // Wait for potential navigation or popup
+              await sleep(randomDelay(3000, 5000));
+
+              // Handle new tab/window if opened
+              const pages = page.context().pages();
+              if (pages.length > 1) {
+                // Close extra tabs and focus back on main
+                for (let i = 1; i < pages.length; i++) {
+                  await pages[i].close().catch(() => {});
+                }
+              }
+
+              // Check if we navigated away
+              if (page.url() !== currentUrl && !page.url().includes('rewards.bing.com')) {
+                // We navigated to a task page, wait and go back
+                await sleep(randomDelay(2000, 4000));
+                await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
+                await sleep(randomDelay(2000, 3000));
+              }
+
+              break; // Move to next attempt after successful click
+            } catch {
+              continue;
+            }
+          }
+
+          if (foundNewItem) break;
+        } catch {
+          continue;
+        }
+      }
+
+      if (!foundNewItem) {
+        // No more items to click
+        break;
+      }
+
+      // Brief pause between items
+      await sleep(randomDelay(1000, 2000));
+    }
+
+    // Also try to click the "Earn more points" or streak bonus if available
+    try {
+      const streakBonus = await page.$('mee-rewards-streak-hero button, .streak-bonus button, [data-bi-id*="streak"]');
+      if (streakBonus) {
+        const isVisible = await streakBonus.isVisible().catch(() => false);
+        if (isVisible) {
+          await streakBonus.click().catch(() => {});
+          clickedCount++;
+          onProgress?.('Clicked streak bonus');
+          await sleep(randomDelay(2000, 3000));
+        }
+      }
+    } catch {
+      // Streak bonus not available or already claimed
+    }
+
+    onProgress?.(`Daily Set: completed ${clickedCount} items`);
     return clickedCount > 0;
   } catch (error: any) {
     onProgress?.(`Daily Set error: ${error.message}`);
@@ -268,10 +354,14 @@ export async function farmBingRewards(
 
     // Phase 1: Daily Set (if enabled)
     if (config.dailySet) {
-      onProgress?.({ currentPhase: 'daily' });
+      onProgress?.({ currentPhase: 'daily', dailySetCompleted: false });
       result.dailySetCompleted = await performDailySet(page, msg => {
-        onProgress?.({ error: null }); // Use error field for status messages temporarily
+        // Forward daily set progress messages to the log
+        onProgress?.({
+          log: [msg]
+        } as any);
       });
+      onProgress?.({ dailySetCompleted: result.dailySetCompleted });
     }
 
     // Phase 2: Desktop searches

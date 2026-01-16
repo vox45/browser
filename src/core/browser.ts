@@ -161,11 +161,11 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
     };
   });
 
-  // Get existing pages or create new one
+  // Get existing pages or create new one - no starter page
   let pages = context.pages();
   if (pages.length === 0) {
     const page = await context.newPage();
-    await page.goto('https://www.google.com');
+    // Empty new tab instead of starter page
     pages = [page];
   }
 
