@@ -269,7 +269,7 @@ ipcMain.handle('browser:navigate', async (_, id: string, url: string) => {
 });
 
 // ==================== Farming Automation ====================
-import { FarmingConfig, runDailySet, runDesktopSearches, runMobileSearches } from '../automation/farming';
+import { FarmingConfig, runSingleDailySetItem, runDesktopSearches, runMobileSearches, DAILY_SET_XPATHS } from '../automation/farming';
 import { getBrowserContext } from '../core/browser';
 
 let farmingAbortController: AbortController | null = null;
@@ -340,37 +340,55 @@ ipcMain.handle('farming:start', async (event, data: {
       let desktopSearches = 0;
       let mobileSearches = 0;
 
-      // Phase 1: Daily Set (separate browser session)
+      // Phase 1: Daily Set (EACH item in separate browser session)
       if (config.dailySet) {
         mainWindow?.webContents.send('farming:progress', {
           currentPhase: 'daily',
-          log: ['[Phase 1] Daily Set - Opening browser...'],
+          log: ['[Phase 1] Daily Set - 3 items, each in separate browser session'],
         });
 
-        try {
-          await launchBrowser(profile);
-          await new Promise(resolve => setTimeout(resolve, 3000));
+        let dailySetCount = 0;
 
-          const context = getBrowserContext(profileId);
-          if (context) {
-            dailySetCompleted = await runDailySet(context, msg => {
-              mainWindow?.webContents.send('farming:progress', { log: [msg] });
+        // Run each daily set item in its own browser session
+        for (let itemIndex = 0; itemIndex < DAILY_SET_XPATHS.length; itemIndex++) {
+          if (farmingAbortController?.signal.aborted) break;
+
+          mainWindow?.webContents.send('farming:progress', {
+            log: [`Daily Set ${itemIndex + 1}/3 - Opening browser...`],
+          });
+
+          try {
+            await launchBrowser(profile);
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            const context = getBrowserContext(profileId);
+            if (context) {
+              const success = await runSingleDailySetItem(context, itemIndex, msg => {
+                mainWindow?.webContents.send('farming:progress', { log: [msg] });
+              });
+              if (success) dailySetCount++;
+            }
+
+            mainWindow?.webContents.send('farming:progress', {
+              log: [`Daily Set ${itemIndex + 1}/3 - Closing browser...`],
             });
+            await stopBrowser(profileId);
+
+            // Wait between daily set items
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          } catch (error: any) {
+            mainWindow?.webContents.send('farming:progress', {
+              log: [`Daily Set ${itemIndex + 1} error: ${error.message}`],
+            });
+            try { await stopBrowser(profileId); } catch {}
           }
-
-          mainWindow?.webContents.send('farming:progress', {
-            dailySetCompleted,
-            log: ['Closing browser...'],
-          });
-          await stopBrowser(profileId);
-
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        } catch (error: any) {
-          mainWindow?.webContents.send('farming:progress', {
-            log: [`Daily Set error: ${error.message}`],
-          });
-          try { await stopBrowser(profileId); } catch {}
         }
+
+        dailySetCompleted = dailySetCount > 0;
+        mainWindow?.webContents.send('farming:progress', {
+          dailySetCompleted,
+          log: [`Daily Set completed: ${dailySetCount}/3 items`],
+        });
       }
 
       if (farmingAbortController?.signal.aborted) break;

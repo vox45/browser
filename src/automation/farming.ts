@@ -185,23 +185,30 @@ async function performBingSearch(
 }
 
 // XPaths for daily set items (from original program - 3 items)
-const DAILY_SET_XPATHS = [
+export const DAILY_SET_XPATHS = [
   '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[1]/div/card-content/mee-rewards-daily-set-item-content/div/a',
   '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[2]/div/card-content/mee-rewards-daily-set-item-content/div/a',
   '//*[@id="daily-sets"]/mee-card-group[1]/div/mee-card[3]/div/card-content/mee-rewards-daily-set-item-content/div/a',
 ];
 
 /**
- * Phase 1: Daily Set collection (runs in separate browser session)
+ * Click a single Daily Set item (runs in its own browser session)
+ * @param itemIndex - 0, 1, or 2 for the three daily set items
  */
-export async function runDailySet(
+export async function runSingleDailySetItem(
   context: BrowserContext,
+  itemIndex: number,
   onProgress?: (msg: string) => void
 ): Promise<boolean> {
   let page: Page | null = null;
 
   try {
-    onProgress?.('Opening browser for Daily Set...');
+    const xpath = DAILY_SET_XPATHS[itemIndex];
+    if (!xpath) {
+      onProgress?.(`Invalid daily set item index: ${itemIndex}`);
+      return false;
+    }
+
     page = await context.newPage();
 
     // Navigate to rewards page
@@ -218,52 +225,35 @@ export async function runDailySet(
       }
     }
 
-    let completedCount = 0;
+    onProgress?.(`Looking for daily set item ${itemIndex + 1}/3...`);
 
-    // Click each daily set item using XPath (all 3)
-    for (let i = 0; i < DAILY_SET_XPATHS.length; i++) {
-      const xpath = DAILY_SET_XPATHS[i];
-      onProgress?.(`Clicking daily set item ${i + 1}/3...`);
+    // Find and click the element
+    const element = await page.waitForSelector(`xpath=${xpath}`, { timeout: 10000 }).catch(() => null);
 
-      try {
-        const element = await page.waitForSelector(`xpath=${xpath}`, { timeout: 10000 }).catch(() => null);
+    if (element) {
+      onProgress?.(`Clicking daily set item ${itemIndex + 1}...`);
+      await page.evaluate((el) => (el as HTMLElement).click(), element);
 
-        if (element) {
-          await page.evaluate((el) => (el as HTMLElement).click(), element);
-          completedCount++;
+      // Wait for action to complete
+      await sleep(randomDelay(4000, 6000));
 
-          await sleep(randomDelay(3000, 4000));
-
-          // Handle new tabs if opened
-          const pages = page.context().pages();
-          if (pages.length > 1) {
-            await sleep(randomDelay(2000, 3000));
-            for (let j = pages.length - 1; j > 0; j--) {
-              await pages[j].close().catch(() => {});
-            }
-          }
-
-          // ALWAYS go back to main rewards page for next item
-          onProgress?.(`Going back to rewards page...`);
-          await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
-          await sleep(randomDelay(2000, 3000));
-        } else {
-          onProgress?.(`Daily set item ${i + 1} not found`);
+      // Handle new tabs if opened
+      const pages = page.context().pages();
+      if (pages.length > 1) {
+        await sleep(randomDelay(2000, 3000));
+        for (let j = pages.length - 1; j > 0; j--) {
+          await pages[j].close().catch(() => {});
         }
-      } catch (err: any) {
-        onProgress?.(`Daily set item ${i + 1} error: ${err.message}`);
-        // Try to go back to rewards page anyway
-        try {
-          await page.goto('https://rewards.bing.com/', { waitUntil: 'networkidle', timeout: 30000 });
-          await sleep(randomDelay(2000, 3000));
-        } catch {}
       }
-    }
 
-    onProgress?.(`Daily Set completed: ${completedCount}/3 items`);
-    return completedCount > 0;
+      onProgress?.(`Daily set item ${itemIndex + 1} completed`);
+      return true;
+    } else {
+      onProgress?.(`Daily set item ${itemIndex + 1} not found`);
+      return false;
+    }
   } catch (error: any) {
-    onProgress?.(`Daily Set error: ${error.message}`);
+    onProgress?.(`Daily set item ${itemIndex + 1} error: ${error.message}`);
     return false;
   } finally {
     if (page) {
