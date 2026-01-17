@@ -194,12 +194,20 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
     };
   });
 
-  // Get existing pages or create new one - no starter page
+  // Get existing pages or create new one
   let pages = context.pages();
   if (pages.length === 0) {
     const page = await context.newPage();
-    // Empty new tab instead of starter page
     pages = [page];
+  }
+
+  // Navigate to homepage if enabled, otherwise blank tab
+  if (profile.startHomepage && profile.homepageUrl) {
+    try {
+      await pages[0].goto(profile.homepageUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    } catch (e) {
+      console.error('Failed to navigate to homepage:', e);
+    }
   }
 
   const instance: BrowserInstance = {

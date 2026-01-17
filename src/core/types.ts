@@ -7,6 +7,9 @@ export interface Profile {
   fingerprint: Fingerprint;
   proxy: ProxyConfig | null;
   notes: string;
+  // Start homepage settings
+  startHomepage: boolean;
+  homepageUrl: string;
 }
 
 // Fingerprint configuration

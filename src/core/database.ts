@@ -75,3 +75,13 @@ export function updateLastUsed(id: string): void {
 export function closeDatabase(): void {
   saveToFile();
 }
+
+export function clearAllProfiles(): void {
+  profiles = [];
+  saveToFile();
+}
+
+export function getProfilesDir(): string {
+  const userDataPath = app?.getPath('userData') || process.cwd();
+  return path.join(userDataPath, 'browser_profiles');
+}

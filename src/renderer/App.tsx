@@ -158,6 +158,8 @@ function App() {
     notes: string;
     screenResolution?: { width: number; height: number };
     fingerprint?: Partial<Profile['fingerprint']>;
+    startHomepage: boolean;
+    homepageUrl: string;
   }) => {
     try {
       if (editingProfile) {
@@ -167,6 +169,8 @@ function App() {
           notes: data.notes,
           proxy: data.proxy || null,
           fingerprint: data.fingerprint,
+          startHomepage: data.startHomepage,
+          homepageUrl: data.homepageUrl,
         });
 
         if ('error' in result) {
@@ -184,6 +188,8 @@ function App() {
           proxy: data.proxy || undefined,
           notes: data.notes,
           fingerprint: data.fingerprint,
+          startHomepage: data.startHomepage,
+          homepageUrl: data.homepageUrl,
         });
 
         if ('error' in result) {

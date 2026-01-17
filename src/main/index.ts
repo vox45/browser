@@ -10,6 +10,8 @@ import {
   updateProfile,
   deleteProfile,
   updateLastUsed,
+  clearAllProfiles,
+  getProfilesDir,
 } from '../core/database';
 import { Profile, ProxyConfig } from '../core/types';
 import { generateFingerprint, GenerateFingerprintOptions } from '../fingerprint/generator';
@@ -110,6 +112,8 @@ ipcMain.handle('profile:create', async (_, data: {
   proxy?: ProxyConfig | string;
   notes?: string;
   fingerprint?: Profile['fingerprint'];
+  startHomepage?: boolean;
+  homepageUrl?: string;
 }) => {
   try {
     const fingerprintOptions: GenerateFingerprintOptions = {
@@ -136,6 +140,8 @@ ipcMain.handle('profile:create', async (_, data: {
       fingerprint,
       proxy,
       notes: data.notes || '',
+      startHomepage: data.startHomepage || false,
+      homepageUrl: data.homepageUrl || 'https://www.google.com',
     };
 
     createProfile(profile);
@@ -253,6 +259,28 @@ ipcMain.handle('browser:status', async (_, id: string) => {
 // Open external link
 ipcMain.handle('shell:openExternal', async (_, url: string) => {
   await shell.openExternal(url);
+});
+
+// Clear all data - delete all profiles and their browser data
+ipcMain.handle('data:clearAll', async () => {
+  try {
+    // Stop all running browsers first
+    await stopAllBrowsers();
+
+    // Clear all profiles from database
+    clearAllProfiles();
+
+    // Delete all profile data directories
+    const profilesDir = getProfilesDir();
+    const fs = require('fs');
+    if (fs.existsSync(profilesDir)) {
+      fs.rmSync(profilesDir, { recursive: true, force: true });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
 });
 
 // Navigate to URL in browser profile

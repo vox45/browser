@@ -98,6 +98,8 @@ interface ProfileModalProps {
     notes: string;
     screenResolution?: { width: number; height: number };
     fingerprint?: Partial<Fingerprint>;
+    startHomepage: boolean;
+    homepageUrl: string;
   }) => void;
   onClose: () => void;
 }
@@ -115,6 +117,10 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
     success?: boolean;
     message?: string;
   }>({ testing: false });
+
+  // Start homepage settings
+  const [startHomepage, setStartHomepage] = useState(false);
+  const [homepageUrl, setHomepageUrl] = useState('https://www.google.com');
 
   // Screen resolution (separate from fingerprint)
   const [screenWidth, setScreenWidth] = useState(1920);
@@ -140,6 +146,8 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
       setName(profile.name);
       setNotes(profile.notes);
       setFingerprint(profile.fingerprint);
+      setStartHomepage(profile.startHomepage || false);
+      setHomepageUrl(profile.homepageUrl || 'https://www.google.com');
 
       // Set individual fields from fingerprint
       const fp = profile.fingerprint;
@@ -280,6 +288,8 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
       notes: notes.trim(),
       screenResolution: { width: screenWidth, height: screenHeight },
       fingerprint: updatedFingerprint,
+      startHomepage,
+      homepageUrl: homepageUrl.trim(),
     });
   };
 
@@ -393,6 +403,32 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
           placeholder="Add notes..."
           rows={2}
         />
+      </div>
+
+      <div className="form-group">
+        <label className="label checkbox-label">
+          <input
+            type="checkbox"
+            checked={startHomepage}
+            onChange={e => setStartHomepage(e.target.checked)}
+          />
+          <span>Open homepage on start</span>
+        </label>
+        {startHomepage && (
+          <input
+            type="text"
+            className="input"
+            value={homepageUrl}
+            onChange={e => setHomepageUrl(e.target.value)}
+            placeholder="https://www.google.com"
+            style={{ marginTop: '8px' }}
+          />
+        )}
+        <p className="form-hint">
+          {startHomepage
+            ? 'Browser will open this URL when profile starts'
+            : 'Browser will open a blank tab when profile starts'}
+        </p>
       </div>
     </>
   );

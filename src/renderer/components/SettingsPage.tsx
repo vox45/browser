@@ -1,39 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../i18n/LanguageContext';
+import { Language } from '../i18n/translations';
 import './SettingsPage.css';
 
 export function SettingsPage() {
+  const { language, setLanguage, t } = useLanguage();
   const [settings, setSettings] = useState({
     startPage: 'https://www.google.com',
     closeAction: 'minimize', // 'minimize' | 'close'
-    language: 'en',
+    language: language,
     theme: 'dark',
   });
+  const [isClearing, setIsClearing] = useState(false);
+
+  // Sync settings.language with context language
+  useEffect(() => {
+    setSettings(prev => ({ ...prev, language }));
+  }, [language]);
 
   const handleChange = (key: string, value: string) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    if (key === 'language' && (value === 'en' || value === 'ru')) {
+      setLanguage(value as Language);
+    }
   };
 
   const handleSave = () => {
     localStorage.setItem('antidetect-settings', JSON.stringify(settings));
-    alert('Settings saved!');
+    alert(t('settingsSaved'));
+  };
+
+  const handleClearAllData = async () => {
+    if (!confirm(t('clearAllDataConfirm'))) return;
+
+    setIsClearing(true);
+    try {
+      const result = await window.api.clearAllData();
+      if ('error' in result) {
+        alert(`${t('error')}: ${result.error}`);
+      } else {
+        alert(t('clearAllDataSuccess'));
+        // Clear local storage too
+        localStorage.removeItem('antidetect-settings');
+        // Reload the app
+        window.location.reload();
+      }
+    } catch (error: any) {
+      alert(`${t('error')}: ${error.message}`);
+    } finally {
+      setIsClearing(false);
+    }
   };
 
   return (
     <div className="settings-page">
       <header className="header">
         <div className="header-left">
-          <h1>Settings</h1>
+          <h1>{t('settingsTitle')}</h1>
         </div>
       </header>
 
       <div className="settings-content">
         <div className="settings-section">
-          <h2>General</h2>
+          <h2>{t('generalSettings')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">Default Start Page</label>
-              <p className="setting-description">URL to open when launching a new browser</p>
+              <label className="setting-label">{t('defaultStartPage')}</label>
+              <p className="setting-description">{t('defaultStartPageDesc')}</p>
             </div>
             <input
               type="text"
@@ -46,23 +80,23 @@ export function SettingsPage() {
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">On Close</label>
-              <p className="setting-description">What to do when closing the main window</p>
+              <label className="setting-label">{t('onClose')}</label>
+              <p className="setting-description">{t('onCloseDesc')}</p>
             </div>
             <select
               className="select setting-select"
               value={settings.closeAction}
               onChange={e => handleChange('closeAction', e.target.value)}
             >
-              <option value="minimize">Minimize to tray</option>
-              <option value="close">Close application</option>
+              <option value="minimize">{t('minimizeToTray')}</option>
+              <option value="close">{t('closeApp')}</option>
             </select>
           </div>
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">Language</label>
-              <p className="setting-description">Interface language</p>
+              <label className="setting-label">{t('interfaceLanguage')}</label>
+              <p className="setting-description">{t('interfaceLanguageDesc')}</p>
             </div>
             <select
               className="select setting-select"
@@ -76,48 +110,48 @@ export function SettingsPage() {
         </div>
 
         <div className="settings-section">
-          <h2>Appearance</h2>
+          <h2>{t('appearance')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">Theme</label>
-              <p className="setting-description">Application color theme</p>
+              <label className="setting-label">{t('theme')}</label>
+              <p className="setting-description">{t('themeDesc')}</p>
             </div>
             <select
               className="select setting-select"
               value={settings.theme}
               onChange={e => handleChange('theme', e.target.value)}
             >
-              <option value="dark">Dark</option>
-              <option value="light">Light (coming soon)</option>
+              <option value="dark">{t('dark')}</option>
+              <option value="light">{t('lightComingSoon')}</option>
             </select>
           </div>
         </div>
 
         <div className="settings-section">
-          <h2>Browser</h2>
+          <h2>{t('browser')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">Chrome Path</label>
-              <p className="setting-description">Path to Chrome/Chromium executable (auto-detected)</p>
+              <label className="setting-label">{t('chromePath')}</label>
+              <p className="setting-description">{t('chromePathDesc')}</p>
             </div>
             <input
               type="text"
               className="input setting-input"
-              placeholder="Auto-detect"
+              placeholder={t('autoDetect')}
               disabled
             />
           </div>
         </div>
 
         <div className="settings-section">
-          <h2>Data</h2>
+          <h2>{t('data')}</h2>
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">Profiles Location</label>
-              <p className="setting-description">Where browser profiles are stored</p>
+              <label className="setting-label">{t('profilesLocation')}</label>
+              <p className="setting-description">{t('profilesLocationDesc')}</p>
             </div>
             <div className="setting-value">
               <code>%APPDATA%\antidetect-browser\browser_profiles</code>
@@ -126,25 +160,22 @@ export function SettingsPage() {
 
           <div className="setting-item">
             <div className="setting-info">
-              <label className="setting-label">Clear All Data</label>
-              <p className="setting-description">Delete all profiles and settings</p>
+              <label className="setting-label">{t('clearAllData')}</label>
+              <p className="setting-description">{t('clearAllDataDesc')}</p>
             </div>
             <button
               className="btn btn-danger"
-              onClick={() => {
-                if (confirm('Are you sure? This will delete ALL profiles and data!')) {
-                  alert('Feature coming soon');
-                }
-              }}
+              onClick={handleClearAllData}
+              disabled={isClearing}
             >
-              Clear All Data
+              {isClearing ? t('loading') : t('clearAllData')}
             </button>
           </div>
         </div>
 
         <div className="settings-actions">
           <button className="btn btn-primary" onClick={handleSave}>
-            Save Settings
+            {t('saveSettings')}
           </button>
         </div>
       </div>

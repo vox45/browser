@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   // Profiles
   getProfiles: () => ipcRenderer.invoke('profile:list'),
   getProfile: (id: string) => ipcRenderer.invoke('profile:get', id),
-  createProfile: (data: { name: string; os?: string; proxy?: ProxyConfig | string; notes?: string; fingerprint?: Fingerprint }) =>
+  createProfile: (data: { name: string; os?: string; proxy?: ProxyConfig | string; notes?: string; fingerprint?: Fingerprint; startHomepage?: boolean; homepageUrl?: string }) =>
     ipcRenderer.invoke('profile:create', data),
   updateProfile: (data: Partial<Profile> & { id: string }) =>
     ipcRenderer.invoke('profile:update', data),
@@ -30,6 +30,9 @@ contextBridge.exposeInMainWorld('api', {
 
   // Shell
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+
+  // Data management
+  clearAllData: () => ipcRenderer.invoke('data:clearAll'),
 
   // Farming Automation
   startFarming: (data: {
@@ -64,6 +67,8 @@ declare global {
         proxy?: ProxyConfig | string;
         notes?: string;
         fingerprint?: Fingerprint;
+        startHomepage?: boolean;
+        homepageUrl?: string;
       }) => Promise<Profile | { error: string }>;
       updateProfile: (data: Partial<Profile> & { id: string }) => Promise<Profile | { error: string }>;
       deleteProfile: (id: string) => Promise<{ success: boolean } | { error: string }>;
@@ -79,6 +84,8 @@ declare global {
         error?: string;
       }>;
       openExternal: (url: string) => Promise<void>;
+      // Data management
+      clearAllData: () => Promise<{ success: boolean } | { error: string }>;
       // Farming
       startFarming: (data: {
         profileIds: string[];
