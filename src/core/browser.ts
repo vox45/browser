@@ -9,6 +9,39 @@ import { getPlaywrightProxy } from '../proxy/manager';
 // Store active browser instances
 const activeBrowsers: Map<string, BrowserInstance> = new Map();
 
+// Valid IANA timezone IDs (subset for validation)
+const VALID_TIMEZONES = new Set([
+  'America/New_York', 'America/Los_Angeles', 'America/Chicago', 'America/Denver',
+  'America/Phoenix', 'America/Toronto', 'America/Vancouver', 'America/Detroit',
+  'America/Edmonton', 'America/Winnipeg', 'America/Mexico_City', 'America/Sao_Paulo',
+  'America/Argentina/Buenos_Aires', 'America/Lima', 'America/Bogota', 'America/Santiago',
+  'America/Caracas', 'Europe/London', 'Europe/Paris', 'Europe/Berlin', 'Europe/Rome',
+  'Europe/Madrid', 'Europe/Amsterdam', 'Europe/Moscow', 'Europe/Kyiv', 'Europe/Warsaw',
+  'Europe/Prague', 'Europe/Istanbul', 'Europe/Vienna', 'Europe/Zurich', 'Europe/Brussels',
+  'Europe/Stockholm', 'Europe/Oslo', 'Europe/Copenhagen', 'Europe/Helsinki', 'Europe/Dublin',
+  'Europe/Lisbon', 'Europe/Athens', 'Europe/Bucharest', 'Europe/Budapest', 'Europe/Sofia',
+  'Europe/Belgrade', 'Europe/Zagreb', 'Europe/Riga', 'Europe/Vilnius', 'Europe/Tallinn',
+  'Europe/Minsk', 'Asia/Tokyo', 'Asia/Shanghai', 'Asia/Hong_Kong', 'Asia/Singapore',
+  'Asia/Seoul', 'Asia/Bangkok', 'Asia/Dubai', 'Asia/Kolkata', 'Asia/Jakarta',
+  'Asia/Kuala_Lumpur', 'Asia/Manila', 'Asia/Ho_Chi_Minh', 'Asia/Taipei', 'Asia/Riyadh',
+  'Asia/Jerusalem', 'Asia/Qatar', 'Asia/Kuwait', 'Asia/Karachi', 'Asia/Dhaka',
+  'Asia/Yangon', 'Asia/Almaty', 'Asia/Tashkent', 'Australia/Sydney', 'Australia/Melbourne',
+  'Australia/Brisbane', 'Australia/Perth', 'Australia/Adelaide', 'Pacific/Auckland',
+  'Pacific/Honolulu', 'Pacific/Fiji', 'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos',
+  'Africa/Nairobi', 'Africa/Casablanca', 'Africa/Tunis', 'Africa/Algiers',
+]);
+
+/**
+ * Validate timezone ID - returns valid timezone or fallback to America/New_York
+ */
+function validateTimezone(timezone: string): string {
+  if (VALID_TIMEZONES.has(timezone)) {
+    return timezone;
+  }
+  console.warn(`Invalid timezone "${timezone}", falling back to America/New_York`);
+  return 'America/New_York';
+}
+
 /**
  * Get Chromium executable path - prioritize Chromium over Chrome
  */
@@ -98,7 +131,7 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
     },
     userAgent: profile.fingerprint.userAgent,
     locale: profile.fingerprint.language,
-    timezoneId: profile.fingerprint.timezone,
+    timezoneId: validateTimezone(profile.fingerprint.timezone),
     deviceScaleFactor: profile.fingerprint.screen.devicePixelRatio,
     proxy: profile.proxy ? getPlaywrightProxy(profile.proxy) : undefined,
     geolocation,
