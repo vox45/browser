@@ -57,8 +57,20 @@ import { Profile, ProxyConfig, ProfileGroup, ProfileTemplate, FarmingSchedule, T
 import { generateFingerprint, GenerateFingerprintOptions } from '../fingerprint/generator';
 import { launchBrowser, stopBrowser, isBrowserRunning, stopAllBrowsers, deleteProfileData, navigateToUrl } from '../core/browser';
 import { testProxy, parseProxyString } from '../proxy/manager';
-import { testTelegramConnection, notifyFarmingComplete, notifyFarmingError } from '../services/telegram';
+import { testTelegramConnection, notifyFarmingComplete, notifyFarmingError, notifyFarmingStart } from '../services/telegram';
 import { startScheduler, stopScheduler, setFarmingHandler, getNextScheduledRun } from '../services/scheduler';
+import {
+  initQueryDatabase,
+  consumeQueries,
+  getQueryStats,
+  addQueries,
+  resetUsedQueries,
+  clearAllQueries,
+  resetToDefaultQueries,
+  getAvailableQueries,
+  getUsedQueries,
+  getAvailableCount,
+} from '../services/queryManager';
 import fs from 'fs';
 
 let mainWindow: BrowserWindow | null = null;
@@ -95,6 +107,7 @@ function createWindow() {
 // App lifecycle
 app.whenReady().then(async () => {
   initDatabase();
+  initQueryDatabase();
   createWindow();
   startScheduler();
 
@@ -403,10 +416,32 @@ ipcMain.handle('farming:start', async (event, data: {
     return { error: 'Farming is already running' };
   }
 
-  const { profileIds, config, customQueries } = data;
+  const { profileIds, config } = data;
+  let { customQueries } = data;
 
   if (profileIds.length === 0) {
     return { error: 'No profiles selected' };
+  }
+
+  // Calculate total queries needed
+  const totalSearchesPerProfile = config.desktopSearches + config.mobileSearches;
+  const totalQueriesNeeded = totalSearchesPerProfile * profileIds.length;
+
+  // If no custom queries provided, consume from database
+  if (!customQueries || customQueries.length === 0) {
+    const availableCount = getAvailableCount();
+
+    if (availableCount === 0) {
+      return { error: 'No queries available. Add more queries or reset used queries.' };
+    }
+
+    if (availableCount < totalQueriesNeeded) {
+      // Use what we have
+      customQueries = consumeQueries(availableCount);
+      console.log(`Only ${availableCount} queries available (need ${totalQueriesNeeded}), using all available`);
+    } else {
+      customQueries = consumeQueries(totalQueriesNeeded);
+    }
   }
 
   isFarmingRunning = true;
@@ -418,12 +453,19 @@ ipcMain.handle('farming:start', async (event, data: {
     typingDelay: { min: 80, max: 120 },
   };
 
+  // Notify via Telegram
+  await notifyFarmingStart(profileIds.length);
+
   // Send initial progress
+  const queryStats = getQueryStats();
   mainWindow?.webContents.send('farming:progress', {
     status: 'running',
     totalProfiles: profileIds.length,
     completedProfiles: 0,
-    log: [`Starting farming for ${profileIds.length} profile(s)...`],
+    log: [
+      `Starting farming for ${profileIds.length} profile(s)...`,
+      `Using ${customQueries.length} queries (${queryStats.available} remaining in database)`,
+    ],
   });
 
   try {
@@ -1004,6 +1046,68 @@ ipcMain.handle('cookies:clear', async (_, profileId: string) => {
       fs.unlinkSync(cookiesJournalPath);
     }
 
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+// ==================== Query Management ====================
+
+ipcMain.handle('queries:stats', async () => {
+  try {
+    return getQueryStats();
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+ipcMain.handle('queries:getAvailable', async () => {
+  try {
+    return getAvailableQueries();
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+ipcMain.handle('queries:getUsed', async () => {
+  try {
+    return getUsedQueries();
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+ipcMain.handle('queries:add', async (_, queries: string[]) => {
+  try {
+    const added = addQueries(queries);
+    return { success: true, added };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+ipcMain.handle('queries:resetUsed', async () => {
+  try {
+    resetUsedQueries();
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+ipcMain.handle('queries:clearAll', async () => {
+  try {
+    clearAllQueries();
+    return { success: true };
+  } catch (error: any) {
+    return { error: error.message };
+  }
+});
+
+ipcMain.handle('queries:resetToDefault', async () => {
+  try {
+    resetToDefaultQueries();
     return { success: true };
   } catch (error: any) {
     return { error: error.message };

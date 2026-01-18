@@ -89,6 +89,15 @@ contextBridge.exposeInMainWorld('api', {
   // Cookies
   getCookies: (profileId: string) => ipcRenderer.invoke('cookies:get', profileId),
   clearCookies: (profileId: string) => ipcRenderer.invoke('cookies:clear', profileId),
+
+  // Query Management
+  getQueryStats: () => ipcRenderer.invoke('queries:stats'),
+  getAvailableQueries: () => ipcRenderer.invoke('queries:getAvailable'),
+  getUsedQueries: () => ipcRenderer.invoke('queries:getUsed'),
+  addQueries: (queries: string[]) => ipcRenderer.invoke('queries:add', queries),
+  resetUsedQueries: () => ipcRenderer.invoke('queries:resetUsed'),
+  clearAllQueries: () => ipcRenderer.invoke('queries:clearAll'),
+  resetToDefaultQueries: () => ipcRenderer.invoke('queries:resetToDefault'),
 });
 
 // Type declarations for renderer
@@ -200,6 +209,15 @@ declare global {
       // Cookies
       getCookies: (profileId: string) => Promise<{ path?: string; exists?: boolean; message?: string; cookies?: any[] } | { error: string }>;
       clearCookies: (profileId: string) => Promise<{ success: boolean } | { error: string }>;
+
+      // Query Management
+      getQueryStats: () => Promise<{ available: number; used: number; total: number }>;
+      getAvailableQueries: () => Promise<string[]>;
+      getUsedQueries: () => Promise<string[]>;
+      addQueries: (queries: string[]) => Promise<{ success: boolean; added?: number } | { error: string }>;
+      resetUsedQueries: () => Promise<{ success: boolean } | { error: string }>;
+      clearAllQueries: () => Promise<{ success: boolean } | { error: string }>;
+      resetToDefaultQueries: () => Promise<{ success: boolean } | { error: string }>;
     };
   }
 }
