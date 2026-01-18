@@ -10,6 +10,73 @@ export interface Profile {
   // Start homepage settings
   startHomepage: boolean;
   homepageUrl: string;
+  // Group/folder
+  group: string;
+  // Auto-start on app launch
+  autoStart: boolean;
+  // Statistics
+  stats: ProfileStats;
+}
+
+export interface ProfileStats {
+  launchCount: number;
+  totalTimeMs: number;
+  lastSessionStart: string | null;
+  searchesCompleted: number;
+  dailySetsCompleted: number;
+}
+
+export interface ProfileGroup {
+  id: string;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface ProfileTemplate {
+  id: string;
+  name: string;
+  os: 'windows' | 'macos' | 'linux';
+  proxy: ProxyConfig | null;
+  startHomepage: boolean;
+  homepageUrl: string;
+  group: string;
+  autoStart: boolean;
+  createdAt: string;
+}
+
+export interface FarmingSchedule {
+  id: string;
+  name: string;
+  profileIds: string[];
+  config: {
+    desktopSearches: number;
+    mobileSearches: number;
+    dailySet: boolean;
+  };
+  schedule: {
+    enabled: boolean;
+    time: string; // HH:MM format
+    days: number[]; // 0-6, Sunday = 0
+  };
+  lastRun: string | null;
+  createdAt: string;
+}
+
+export interface TelegramConfig {
+  enabled: boolean;
+  botToken: string;
+  chatId: string;
+  notifyOnStart: boolean;
+  notifyOnComplete: boolean;
+  notifyOnError: boolean;
+}
+
+export interface BackupConfig {
+  autoBackup: boolean;
+  backupInterval: 'daily' | 'weekly' | 'monthly';
+  maxBackups: number;
+  lastBackup: string | null;
 }
 
 // Fingerprint configuration

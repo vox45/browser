@@ -145,6 +145,106 @@ export const translations = {
     success: 'Success',
     confirm: 'Confirm',
     deleteProfileConfirm: 'Are you sure you want to delete this profile?',
+
+    // Groups
+    groups: 'Groups',
+    newGroup: 'New Group',
+    groupName: 'Group Name',
+    groupColor: 'Color',
+    noGroup: 'No group',
+    deleteGroupConfirm: 'Delete this group? Profiles will be moved to "No group".',
+
+    // Templates
+    templates: 'Templates',
+    newTemplate: 'New Template',
+    templateName: 'Template Name',
+    useTemplate: 'Use Template',
+    saveAsTemplate: 'Save as Template',
+    deleteTemplateConfirm: 'Delete this template?',
+
+    // Bulk Operations
+    bulkCreate: 'Bulk Create',
+    bulkDelete: 'Bulk Delete',
+    profileCount: 'Number of profiles',
+    namePrefix: 'Name prefix',
+    bulkCreateConfirm: 'Create {count} profiles?',
+    bulkDeleteConfirm: 'Delete {count} selected profiles?',
+
+    // Import/Export
+    importExport: 'Import/Export',
+    exportProfile: 'Export Profile',
+    exportAll: 'Export All',
+    importProfile: 'Import Profile',
+    importProfiles: 'Import Profiles',
+    exportSuccess: 'Export successful',
+    importSuccess: 'Import successful: {count} profile(s)',
+    selectFile: 'Select file',
+
+    // Statistics
+    statistics: 'Statistics',
+    launchCount: 'Launch count',
+    totalTime: 'Total time',
+    searchesCompleted: 'Searches completed',
+    dailySetsCompleted: 'Daily sets completed',
+    hours: 'h',
+    minutes: 'm',
+
+    // Auto-start
+    autoStart: 'Auto-start',
+    autoStartDesc: 'Launch this profile when app starts',
+
+    // Schedules
+    schedules: 'Schedules',
+    newSchedule: 'New Schedule',
+    scheduleName: 'Schedule Name',
+    scheduleTime: 'Time',
+    scheduleDays: 'Days',
+    scheduleEnabled: 'Enabled',
+    nextRun: 'Next run',
+    lastRun: 'Last run',
+    monday: 'Mon',
+    tuesday: 'Tue',
+    wednesday: 'Wed',
+    thursday: 'Thu',
+    friday: 'Fri',
+    saturday: 'Sat',
+    sunday: 'Sun',
+    deleteScheduleConfirm: 'Delete this schedule?',
+
+    // Telegram
+    telegram: 'Telegram',
+    telegramEnabled: 'Enable Telegram notifications',
+    botToken: 'Bot Token',
+    chatId: 'Chat ID',
+    notifyOnStart: 'Notify on farming start',
+    notifyOnComplete: 'Notify on farming complete',
+    notifyOnError: 'Notify on error',
+    testTelegram: 'Test Connection',
+    telegramTestSuccess: 'Test message sent successfully!',
+    telegramTestFailed: 'Failed to send test message',
+
+    // Backup
+    backup: 'Backup',
+    createBackup: 'Create Backup',
+    restoreBackup: 'Restore Backup',
+    autoBackup: 'Auto backup',
+    backupInterval: 'Backup interval',
+    backupDaily: 'Daily',
+    backupWeekly: 'Weekly',
+    backupMonthly: 'Monthly',
+    maxBackups: 'Max backups',
+    lastBackup: 'Last backup',
+    backupList: 'Available backups',
+    backupCreated: 'Backup created successfully',
+    backupRestored: 'Backup restored successfully',
+    restoreConfirm: 'Restore this backup? Current data will be replaced.',
+    deleteBackupConfirm: 'Delete this backup?',
+
+    // Cookies
+    cookies: 'Cookies',
+    clearCookies: 'Clear Cookies',
+    clearCookiesConfirm: 'Clear all cookies for this profile?',
+    cookiesCleared: 'Cookies cleared successfully',
   },
   ru: {
     // Navigation
