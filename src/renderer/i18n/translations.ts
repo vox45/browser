@@ -114,6 +114,7 @@ export const translations = {
 
     // Automation
     bingFarming: 'Bing Rewards Farming',
+    farming: 'Farming',
     selectProfiles: 'Select profiles to farm',
     noProfilesForFarming: 'No profiles available',
     desktopSearches: 'Desktop Searches',
@@ -131,6 +132,30 @@ export const translations = {
     mobile: 'Mobile',
     daily: 'Daily',
     completedProfiles: 'profiles completed',
+    configuration: 'Configuration',
+    searchSettings: 'Search Settings',
+    queryDatabase: 'Query Database',
+    available: 'Available',
+    used: 'Used',
+    total: 'Total',
+    perProfile: 'Per profile',
+    viewQueries: 'View Queries',
+    readyToStart: 'Ready to start',
+    farmingInProgress: 'Farming in progress...',
+    farmingCompleted: 'Farming completed!',
+
+    // Query Manager
+    queryManager: 'Query Manager',
+    queries: 'Queries',
+    addQueries: 'Add Queries',
+    resetUsed: 'Reset Used',
+    resetToDefault: 'Reset to Default',
+    clearAll: 'Clear All',
+    dropQueriesHere: 'Drag & drop .txt file to add queries',
+    browseFile: 'Browse file',
+    availableQueries: 'Available Queries',
+    enterQueriesPlaceholder: 'Enter queries, one per line...',
+    add: 'Add',
 
     // Common
     delete: 'Delete',
@@ -152,6 +177,7 @@ export const translations = {
     groupName: 'Group Name',
     groupColor: 'Color',
     noGroup: 'No group',
+    noGroups: 'No groups created',
     deleteGroupConfirm: 'Delete this group? Profiles will be moved to "No group".',
 
     // Templates
@@ -161,6 +187,8 @@ export const translations = {
     useTemplate: 'Use Template',
     saveAsTemplate: 'Save as Template',
     deleteTemplateConfirm: 'Delete this template?',
+    noTemplates: 'No templates created',
+    templatesHint: 'Templates can be created from the profile modal',
 
     // Bulk Operations
     bulkCreate: 'Bulk Create',
@@ -210,6 +238,11 @@ export const translations = {
     saturday: 'Sat',
     sunday: 'Sun',
     deleteScheduleConfirm: 'Delete this schedule?',
+    noSchedules: 'No schedules',
+    noSchedulesDesc: 'Create a schedule to automate farming',
+    editSchedule: 'Edit Schedule',
+    enterScheduleName: 'Enter schedule name',
+    createSchedule: 'Create Schedule',
 
     // Telegram
     telegram: 'Telegram',
@@ -239,6 +272,7 @@ export const translations = {
     backupRestored: 'Backup restored successfully',
     restoreConfirm: 'Restore this backup? Current data will be replaced.',
     deleteBackupConfirm: 'Delete this backup?',
+    noBackups: 'No backups available',
 
     // Cookies
     cookies: 'Cookies',
@@ -359,6 +393,7 @@ export const translations = {
 
     // Automation
     bingFarming: 'Фарминг Bing Rewards',
+    farming: 'Фарминг',
     selectProfiles: 'Выберите профили для фарминга',
     noProfilesForFarming: 'Нет доступных профилей',
     desktopSearches: 'Поиски с ПК',
@@ -376,6 +411,30 @@ export const translations = {
     mobile: 'Телефон',
     daily: 'Ежедневный',
     completedProfiles: 'профилей завершено',
+    configuration: 'Конфигурация',
+    searchSettings: 'Настройки поиска',
+    queryDatabase: 'База запросов',
+    available: 'Доступно',
+    used: 'Использовано',
+    total: 'Всего',
+    perProfile: 'На профиль',
+    viewQueries: 'Просмотр запросов',
+    readyToStart: 'Готов к запуску',
+    farmingInProgress: 'Фарминг выполняется...',
+    farmingCompleted: 'Фарминг завершён!',
+
+    // Query Manager
+    queryManager: 'Менеджер запросов',
+    queries: 'Запросы',
+    addQueries: 'Добавить запросы',
+    resetUsed: 'Сбросить использованные',
+    resetToDefault: 'Сбросить по умолчанию',
+    clearAll: 'Очистить все',
+    dropQueriesHere: 'Перетащите .txt файл для добавления запросов',
+    browseFile: 'Выбрать файл',
+    availableQueries: 'Доступные запросы',
+    enterQueriesPlaceholder: 'Введите запросы, по одному на строку...',
+    add: 'Добавить',
 
     // Common
     delete: 'Удалить',
@@ -390,6 +449,115 @@ export const translations = {
     success: 'Успешно',
     confirm: 'Подтвердить',
     deleteProfileConfirm: 'Вы уверены, что хотите удалить этот профиль?',
+
+    // Groups
+    groups: 'Группы',
+    newGroup: 'Новая группа',
+    groupName: 'Название группы',
+    groupColor: 'Цвет',
+    noGroup: 'Без группы',
+    noGroups: 'Групп пока нет',
+    deleteGroupConfirm: 'Удалить эту группу? Профили будут перемещены в "Без группы".',
+
+    // Templates
+    templates: 'Шаблоны',
+    newTemplate: 'Новый шаблон',
+    templateName: 'Название шаблона',
+    useTemplate: 'Использовать шаблон',
+    saveAsTemplate: 'Сохранить как шаблон',
+    deleteTemplateConfirm: 'Удалить этот шаблон?',
+    noTemplates: 'Шаблонов пока нет',
+    templatesHint: 'Шаблоны можно создать из модального окна профиля',
+
+    // Bulk Operations
+    bulkCreate: 'Массовое создание',
+    bulkDelete: 'Массовое удаление',
+    profileCount: 'Количество профилей',
+    namePrefix: 'Префикс имени',
+    bulkCreateConfirm: 'Создать {count} профилей?',
+    bulkDeleteConfirm: 'Удалить {count} выбранных профилей?',
+
+    // Import/Export
+    importExport: 'Импорт/Экспорт',
+    exportProfile: 'Экспорт профиля',
+    exportAll: 'Экспорт всех',
+    importProfile: 'Импорт профиля',
+    importProfiles: 'Импорт профилей',
+    exportSuccess: 'Экспорт выполнен',
+    importSuccess: 'Импорт выполнен: {count} профиль(ей)',
+    selectFile: 'Выбрать файл',
+
+    // Statistics
+    statistics: 'Статистика',
+    launchCount: 'Количество запусков',
+    totalTime: 'Общее время',
+    searchesCompleted: 'Выполнено поисков',
+    dailySetsCompleted: 'Выполнено ежедневных наборов',
+    hours: 'ч',
+    minutes: 'м',
+
+    // Auto-start
+    autoStart: 'Автозапуск',
+    autoStartDesc: 'Запускать этот профиль при старте приложения',
+
+    // Schedules
+    schedules: 'Расписания',
+    newSchedule: 'Новое расписание',
+    scheduleName: 'Название расписания',
+    scheduleTime: 'Время',
+    scheduleDays: 'Дни',
+    scheduleEnabled: 'Включено',
+    nextRun: 'Следующий запуск',
+    lastRun: 'Последний запуск',
+    monday: 'Пн',
+    tuesday: 'Вт',
+    wednesday: 'Ср',
+    thursday: 'Чт',
+    friday: 'Пт',
+    saturday: 'Сб',
+    sunday: 'Вс',
+    deleteScheduleConfirm: 'Удалить это расписание?',
+    noSchedules: 'Нет расписаний',
+    noSchedulesDesc: 'Создайте расписание для автоматизации фарминга',
+    editSchedule: 'Редактировать расписание',
+    enterScheduleName: 'Введите название расписания',
+    createSchedule: 'Создать расписание',
+
+    // Telegram
+    telegram: 'Telegram',
+    telegramEnabled: 'Включить уведомления Telegram',
+    botToken: 'Токен бота',
+    chatId: 'ID чата',
+    notifyOnStart: 'Уведомлять о начале фарминга',
+    notifyOnComplete: 'Уведомлять о завершении фарминга',
+    notifyOnError: 'Уведомлять об ошибках',
+    testTelegram: 'Проверить соединение',
+    telegramTestSuccess: 'Тестовое сообщение отправлено!',
+    telegramTestFailed: 'Не удалось отправить сообщение',
+
+    // Backup
+    backup: 'Резервное копирование',
+    createBackup: 'Создать копию',
+    restoreBackup: 'Восстановить',
+    autoBackup: 'Автоматическое копирование',
+    backupInterval: 'Интервал копирования',
+    backupDaily: 'Ежедневно',
+    backupWeekly: 'Еженедельно',
+    backupMonthly: 'Ежемесячно',
+    maxBackups: 'Макс. копий',
+    lastBackup: 'Последняя копия',
+    backupList: 'Доступные копии',
+    backupCreated: 'Резервная копия создана',
+    backupRestored: 'Резервная копия восстановлена',
+    restoreConfirm: 'Восстановить эту копию? Текущие данные будут заменены.',
+    deleteBackupConfirm: 'Удалить эту резервную копию?',
+    noBackups: 'Нет резервных копий',
+
+    // Cookies
+    cookies: 'Куки',
+    clearCookies: 'Очистить куки',
+    clearCookiesConfirm: 'Очистить все куки для этого профиля?',
+    cookiesCleared: 'Куки очищены',
   },
 };
 
