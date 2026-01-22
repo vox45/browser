@@ -5,6 +5,7 @@ import { SocksProxyAgent } from 'socks-proxy-agent';
 
 /**
  * Proxy Manager - handles proxy testing and configuration
+ * Supports IPv4 and IPv6 addresses
  */
 
 export interface ProxyTestResult {
@@ -16,6 +17,28 @@ export interface ProxyTestResult {
 }
 
 /**
+ * Check if a string is an IPv6 address
+ */
+function isIPv6(host: string): boolean {
+  // Remove brackets if present
+  const cleanHost = host.replace(/^\[|\]$/g, '');
+  // IPv6 contains multiple colons
+  return cleanHost.includes(':');
+}
+
+/**
+ * Format host for URL (wrap IPv6 in brackets)
+ */
+function formatHost(host: string): string {
+  if (isIPv6(host)) {
+    // Remove existing brackets and add new ones
+    const cleanHost = host.replace(/^\[|\]$/g, '');
+    return `[${cleanHost}]`;
+  }
+  return host;
+}
+
+/**
  * Format proxy URL for Playwright
  */
 export function formatProxyUrl(proxy: ProxyConfig): string {
@@ -23,7 +46,8 @@ export function formatProxyUrl(proxy: ProxyConfig): string {
     ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@`
     : '';
 
-  return `${proxy.type}://${auth}${proxy.host}:${proxy.port}`;
+  const host = formatHost(proxy.host);
+  return `${proxy.type}://${auth}${host}:${proxy.port}`;
 }
 
 /**
@@ -34,6 +58,11 @@ export function formatProxyUrl(proxy: ProxyConfig): string {
  * - user:pass@host:port
  * - type://host:port
  * - type://user:pass@host:port
+ * - [ipv6]:port
+ * - [ipv6]:port:user:pass
+ * - user:pass@[ipv6]:port
+ * - type://[ipv6]:port
+ * - type://user:pass@[ipv6]:port
  */
 export function parseProxyString(proxyString: string): ProxyConfig | null {
   try {
@@ -52,25 +81,79 @@ export function parseProxyString(proxyString: string): ProxyConfig | null {
 
     // Check for user:pass@host:port format
     if (proxyString.includes('@')) {
-      const [auth, hostPort] = proxyString.split('@');
-      const [user, pass] = auth.split(':');
-      username = user;
-      password = pass;
+      const atIndex = proxyString.lastIndexOf('@');
+      const auth = proxyString.slice(0, atIndex);
+      const hostPort = proxyString.slice(atIndex + 1);
+
+      // Parse auth (user:pass)
+      const colonIndex = auth.indexOf(':');
+      if (colonIndex !== -1) {
+        username = auth.slice(0, colonIndex);
+        password = auth.slice(colonIndex + 1);
+      } else {
+        username = auth;
+      }
+
       proxyString = hostPort;
     }
 
-    // Parse host:port or host:port:user:pass
-    const parts = proxyString.split(':');
-    if (parts.length === 2) {
-      host = parts[0];
-      port = parseInt(parts[1], 10);
-    } else if (parts.length === 4) {
-      host = parts[0];
-      port = parseInt(parts[1], 10);
-      username = parts[2];
-      password = parts[3];
+    // Check if it's an IPv6 address (wrapped in brackets)
+    if (proxyString.startsWith('[')) {
+      // IPv6 format: [ipv6]:port or [ipv6]:port:user:pass
+      const closeBracket = proxyString.indexOf(']');
+      if (closeBracket === -1) {
+        return null;
+      }
+
+      host = proxyString.slice(1, closeBracket); // Extract IPv6 without brackets
+      const remainder = proxyString.slice(closeBracket + 1);
+
+      if (!remainder.startsWith(':')) {
+        return null;
+      }
+
+      const parts = remainder.slice(1).split(':');
+      if (parts.length === 1) {
+        port = parseInt(parts[0], 10);
+      } else if (parts.length === 3) {
+        port = parseInt(parts[0], 10);
+        username = username || parts[1];
+        password = password || parts[2];
+      } else {
+        return null;
+      }
     } else {
-      return null;
+      // IPv4 or hostname format
+      // Check if it looks like an IPv6 without brackets (multiple colons)
+      const colonCount = (proxyString.match(/:/g) || []).length;
+
+      if (colonCount > 3) {
+        // Likely IPv6 without brackets - try to parse
+        // Find the last colon that separates port
+        const lastColonIndex = proxyString.lastIndexOf(':');
+        const potentialPort = proxyString.slice(lastColonIndex + 1);
+
+        if (/^\d+$/.test(potentialPort)) {
+          host = proxyString.slice(0, lastColonIndex);
+          port = parseInt(potentialPort, 10);
+        } else {
+          return null;
+        }
+      } else {
+        // Standard format: host:port or host:port:user:pass
+        const parts = proxyString.split(':');
+        if (parts.length === 2) {
+          host = parts[0];
+          port = parseInt(parts[1], 10);
+        } else if (parts.length === 4) {
+          host = parts[0];
+          port = parseInt(parts[1], 10);
+          username = username || parts[2];
+          password = password || parts[3];
+        } else {
+          return null;
+        }
+      }
     }
 
     if (!host || isNaN(port)) {
@@ -203,7 +286,9 @@ export function getPlaywrightProxy(proxy: ProxyConfig): {
   username?: string;
   password?: string;
 } {
-  const server = `${proxy.type === 'socks4' || proxy.type === 'socks5' ? 'socks5' : proxy.type}://${proxy.host}:${proxy.port}`;
+  const proxyType = proxy.type === 'socks4' || proxy.type === 'socks5' ? 'socks5' : proxy.type;
+  const host = formatHost(proxy.host);
+  const server = `${proxyType}://${host}:${proxy.port}`;
 
   const config: { server: string; username?: string; password?: string } = { server };
 
