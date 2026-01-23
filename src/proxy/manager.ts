@@ -19,7 +19,8 @@ export interface ProxyTestResult {
 /**
  * Check if a string is an IPv6 address
  */
-function isIPv6(host: string): boolean {
+function isIPv6(host: string | undefined | null): boolean {
+  if (!host) return false;
   // Remove brackets if present
   const cleanHost = host.replace(/^\[|\]$/g, '');
   // IPv6 contains multiple colons
@@ -29,7 +30,8 @@ function isIPv6(host: string): boolean {
 /**
  * Format host for URL (wrap IPv6 in brackets)
  */
-function formatHost(host: string): string {
+function formatHost(host: string | undefined | null): string {
+  if (!host) return '';
   if (isIPv6(host)) {
     // Remove existing brackets and add new ones
     const cleanHost = host.replace(/^\[|\]$/g, '');
@@ -42,12 +44,16 @@ function formatHost(host: string): string {
  * Format proxy URL for Playwright
  */
 export function formatProxyUrl(proxy: ProxyConfig): string {
+  if (!proxy || !proxy.host || !proxy.port) {
+    throw new Error('Invalid proxy configuration: host and port are required');
+  }
+
   const auth = proxy.username && proxy.password
     ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password)}@`
     : '';
 
   const host = formatHost(proxy.host);
-  return `${proxy.type}://${auth}${host}:${proxy.port}`;
+  return `${proxy.type || 'http'}://${auth}${host}:${proxy.port}`;
 }
 
 /**
@@ -285,8 +291,13 @@ export function getPlaywrightProxy(proxy: ProxyConfig): {
   server: string;
   username?: string;
   password?: string;
-} {
-  const proxyType = proxy.type === 'socks4' || proxy.type === 'socks5' ? 'socks5' : proxy.type;
+} | null {
+  if (!proxy || !proxy.host || !proxy.port) {
+    console.error('Invalid proxy configuration:', proxy);
+    return null;
+  }
+
+  const proxyType = proxy.type === 'socks4' || proxy.type === 'socks5' ? 'socks5' : (proxy.type || 'http');
   const host = formatHost(proxy.host);
   const server = `${proxyType}://${host}:${proxy.port}`;
 

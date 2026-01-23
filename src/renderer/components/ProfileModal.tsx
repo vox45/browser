@@ -166,12 +166,12 @@ export function ProfileModal({ profile, onSave, onClose }: ProfileModalProps) {
       setScreenWidth(fp.screen.width);
       setScreenHeight(fp.screen.height);
 
-      if (profile.proxy) {
+      if (profile.proxy && profile.proxy.host && profile.proxy.port) {
         const { type, host, port, username, password } = profile.proxy;
         if (username && password) {
-          setProxy(`${type}://${username}:${password}@${host}:${port}`);
+          setProxy(`${type || 'http'}://${username}:${password}@${host}:${port}`);
         } else {
-          setProxy(`${type}://${host}:${port}`);
+          setProxy(`${type || 'http'}://${host}:${port}`);
         }
       }
     } else {

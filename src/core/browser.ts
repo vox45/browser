@@ -133,7 +133,7 @@ export async function launchBrowser(profile: Profile): Promise<BrowserInstance> 
     locale: profile.fingerprint.language,
     timezoneId: validateTimezone(profile.fingerprint.timezone),
     deviceScaleFactor: profile.fingerprint.screen.devicePixelRatio,
-    proxy: profile.proxy ? getPlaywrightProxy(profile.proxy) : undefined,
+    proxy: profile.proxy ? (getPlaywrightProxy(profile.proxy) || undefined) : undefined,
     geolocation,
     permissions: geolocation ? ['geolocation'] : [],
     args: [

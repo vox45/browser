@@ -182,6 +182,7 @@ function ProfileCard({ profile, selected, onSelect, onEdit, onDelete, onLaunch, 
       'Australia/Melbourne': 'Melbourne, AU',
       'Pacific/Auckland': 'Auckland, NZ',
     };
+    if (!tz) return 'Custom';
     return cities[tz] || tz.split('/').pop()?.replace('_', ' ') || 'Custom';
   };
 
@@ -217,9 +218,9 @@ function ProfileCard({ profile, selected, onSelect, onEdit, onDelete, onLaunch, 
         <div className="detail-row">
           <span className="detail-label">Proxy</span>
           <span className="detail-value">
-            {profile.proxy ? (
+            {profile.proxy && profile.proxy.host ? (
               <span className="proxy-active">
-                {profile.proxy.host}:{profile.proxy.port}
+                {profile.proxy.host}:{profile.proxy.port || ''}
               </span>
             ) : (
               <span className="proxy-none">Direct</span>
