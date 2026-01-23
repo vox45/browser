@@ -62,19 +62,30 @@ export function formatProxyUrl(proxy: ProxyConfig): string {
  * - host:port
  * - host:port:user:pass
  * - user:pass@host:port
+ * - USERNAME:PASSWORD@IP:PORT (same as above)
  * - type://host:port
  * - type://user:pass@host:port
  * - [ipv6]:port
  * - [ipv6]:port:user:pass
  * - user:pass@[ipv6]:port
+ * - user:pass@ipv6:port (auto-detects IPv6 by colon count)
  * - type://[ipv6]:port
  * - type://user:pass@[ipv6]:port
  */
 export function parseProxyString(proxyString: string): ProxyConfig | null {
   try {
+    if (!proxyString || typeof proxyString !== 'string') {
+      return null;
+    }
+
+    proxyString = proxyString.trim();
+    if (!proxyString) {
+      return null;
+    }
+
     let type: ProxyConfig['type'] = 'http';
-    let host: string;
-    let port: number;
+    let host: string = '';
+    let port: number = 0;
     let username: string | undefined;
     let password: string | undefined;
 
@@ -162,7 +173,7 @@ export function parseProxyString(proxyString: string): ProxyConfig | null {
       }
     }
 
-    if (!host || isNaN(port)) {
+    if (!host || isNaN(port) || port <= 0 || port > 65535) {
       return null;
     }
 
@@ -220,10 +231,21 @@ export async function testProxy(proxy: ProxyConfig): Promise<ProxyTestResult> {
           }
         });
 
-        req.on('error', (err) => {
+        req.on('error', (err: NodeJS.ErrnoException) => {
+          let errorMsg = err.message;
+          // Provide more helpful error messages
+          if (err.code === 'ENETUNREACH') {
+            errorMsg = 'Network unreachable - IPv6 may not be supported on your system';
+          } else if (err.code === 'ECONNREFUSED') {
+            errorMsg = 'Connection refused - proxy server may be down';
+          } else if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT') {
+            errorMsg = 'Connection timed out';
+          } else if (err.code === 'ENOTFOUND') {
+            errorMsg = 'Host not found - check proxy address';
+          }
           resolve({
             success: false,
-            error: err.message,
+            error: errorMsg,
           });
         });
 
@@ -261,10 +283,21 @@ export async function testProxy(proxy: ProxyConfig): Promise<ProxyTestResult> {
         });
       });
 
-      req.on('error', (err) => {
+      req.on('error', (err: NodeJS.ErrnoException) => {
+        let errorMsg = err.message;
+        // Provide more helpful error messages
+        if (err.code === 'ENETUNREACH') {
+          errorMsg = 'Network unreachable - IPv6 may not be supported on your system';
+        } else if (err.code === 'ECONNREFUSED') {
+          errorMsg = 'Connection refused - proxy server may be down';
+        } else if (err.code === 'ETIMEDOUT' || err.code === 'ESOCKETTIMEDOUT') {
+          errorMsg = 'Connection timed out';
+        } else if (err.code === 'ENOTFOUND') {
+          errorMsg = 'Host not found - check proxy address';
+        }
         resolve({
           success: false,
-          error: err.message,
+          error: errorMsg,
         });
       });
 
@@ -276,9 +309,13 @@ export async function testProxy(proxy: ProxyConfig): Promise<ProxyTestResult> {
         });
       });
     } catch (err: any) {
+      let errorMsg = err.message;
+      if (err.code === 'ENETUNREACH') {
+        errorMsg = 'Network unreachable - IPv6 may not be supported on your system';
+      }
       resolve({
         success: false,
-        error: err.message,
+        error: errorMsg,
       });
     }
   });
